@@ -6,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { mockEvents } from '@/data/mock-events';
 
-const sections = ['Recommended for you', 'Today only', 'Popular nearby'];
+const sections = ['Recommended for you', 'Today only', 'Top picks'];
 
 export default function FeaturedScreen() {
   const featuredEvent = mockEvents[0];
