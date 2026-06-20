@@ -1,0 +1,10 @@
+{
+  "name": "@offmap/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"Next.js web app has not been scaffolded yet. Add Next.js here when ready.\" && exit 1",
+    "lint": "echo \"No web lint configured yet.\"",
+    "typecheck": "echo \"No web typecheck configured yet.\""
+  }
+}

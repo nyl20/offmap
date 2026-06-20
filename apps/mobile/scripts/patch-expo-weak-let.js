@@ -1,6 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
+function findNodeModules(startDir) {
+  let currentDir = startDir;
+
+  while (currentDir !== path.dirname(currentDir)) {
+    const candidate = path.join(currentDir, 'node_modules');
+
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+
+    currentDir = path.dirname(currentDir);
+  }
+
+  return path.join(startDir, 'node_modules');
+}
+
+const nodeModulesDir = findNodeModules(process.cwd());
+
 const replacements = [
   {
     file: 'node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI/Contexts/HostFunctionContext.swift',
@@ -102,7 +120,7 @@ const replacements = [
 let patched = 0;
 
 for (const replacement of replacements) {
-  const absolutePath = path.join(process.cwd(), replacement.file);
+  const absolutePath = path.join(nodeModulesDir, replacement.file.replace(/^node_modules\//, ''));
 
   if (!fs.existsSync(absolutePath)) {
     continue;

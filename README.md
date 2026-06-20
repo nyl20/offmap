@@ -1,56 +1,49 @@
-# Welcome to your Expo app 👋
+# OFFMAP
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+OFFMAP is organized as a monorepo so the mobile app, future web app, shared
+TypeScript code, ingestion jobs, and Supabase project files can evolve together.
 
-## Get started
+## Layout
 
-1. Install dependencies
+```txt
+apps/
+  mobile/          Expo app
+  web/             Future Next.js web app
 
-   ```bash
-   npm install
-   ```
+packages/
+  shared/          Shared TypeScript types, constants, and pure utilities
+  db/              Generated Supabase types and shared database helpers
 
-2. Start the app
+data/
+  ingestion/       Python scraping/API ingestion scripts
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+supabase/
+  migrations/      Supabase SQL migrations
+  functions/       Supabase Edge Functions
+  seed.sql         Local seed data
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Mobile
 
-### Other setup steps
+Run the Expo app from the repo root:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+npm run mobile
+```
 
-## Learn more
+Or run commands directly in `apps/mobile`:
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+cd apps/mobile
+npm run start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Web
 
-## Join the community
+`apps/web` is currently a placeholder for the future Next.js app.
 
-Join our community of developers creating universal apps.
+## Data
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Ingestion scripts should live under `data/ingestion`. Keep generated database
+types and shared database-facing TypeScript in `packages/db`, and keep SQL
+migrations in `supabase/migrations`.

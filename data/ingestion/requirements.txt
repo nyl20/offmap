@@ -1,0 +1,4 @@
+# Add ingestion dependencies here, for example:
+# requests
+# beautifulsoup4
+# pandas
