@@ -1,12 +1,12 @@
 import { Link } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Colors, Palette } from '@/constants/theme';
 import { mockEvents } from '@/data/mock-events';
-import { isSupabaseConfigured } from '@/lib/supabase';
 import { useEventFilterStore } from '@/store/use-event-filter-store';
 import type { EventCategory } from '@/types/event';
 
@@ -20,6 +20,7 @@ const quickFilters: { label: string; category?: EventCategory; freeOnly?: boolea
 
 export function OffmapMap() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const categories = useEventFilterStore((state) => state.categories);
   const setCategories = useEventFilterStore((state) => state.setCategories);
   const freeOnly = useEventFilterStore((state) => state.freeOnly);
@@ -90,21 +91,49 @@ export function OffmapMap() {
         </View>
       </View>
 
-      <SafeAreaView edges={['bottom']} style={styles.bottomSheet}>
-        <ThemedText type="smallBold">Nearby within {radiusMiles} miles</ThemedText>
-        <Link href={`/event/${selectedEvent.id}`} asChild>
-          <Pressable style={styles.eventCard}>
-            <ThemedText type="smallBold">{selectedEvent.category.toUpperCase()}</ThemedText>
-            <ThemedText type="subtitle">{selectedEvent.title}</ThemedText>
-            <ThemedText themeColor="textSecondary">
-              {selectedEvent.venueName} - {selectedEvent.price}
+      <SafeAreaView
+        edges={['bottom']}
+        style={[styles.bottomSheet, sheetExpanded ? styles.bottomSheetExpanded : styles.bottomSheetCollapsed]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSheetExpanded((expanded) => !expanded)}
+          style={styles.sheetHandleArea}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeaderRow}>
+            <View style={styles.sheetTitleRow}>
+              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.teal} />
+              <ThemedText style={styles.sheetTitle}>Nearby events</ThemedText>
+            </View>
+            <SymbolView
+              name={{
+                ios: sheetExpanded ? 'chevron.down' : 'chevron.up',
+                web: sheetExpanded ? 'expand_more' : 'expand_less',
+              }}
+              size={16}
+              tintColor={Palette.vintageBerry}
+            />
+          </View>
+          {!sheetExpanded ? (
+            <ThemedText numberOfLines={1} style={styles.collapsedEventText}>
+              {selectedEvent.title} - {selectedEvent.venueName}
             </ThemedText>
-          </Pressable>
-        </Link>
-        <ThemedText type="small" themeColor="textSecondary">
-          Native Mapbox renders in iOS/Android builds. Supabase:{' '}
-          {isSupabaseConfigured ? 'configured' : 'add env vars in .env'}
-        </ThemedText>
+          ) : null}
+        </Pressable>
+
+        {sheetExpanded ? (
+          <>
+            <ThemedText style={styles.sheetMeta}>Within {radiusMiles} miles</ThemedText>
+            <Link href={`/event/${selectedEvent.id}`} asChild>
+              <Pressable style={styles.eventCard}>
+                <ThemedText style={styles.eventCategory}>{selectedEvent.category}</ThemedText>
+                <ThemedText style={styles.eventTitle}>{selectedEvent.title}</ThemedText>
+                <ThemedText style={styles.eventMeta}>
+                  {selectedEvent.venueName} - {selectedEvent.price}
+                </ThemedText>
+              </Pressable>
+            </Link>
+          </>
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -156,7 +185,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   filterChipActive: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E8FAFA',
   },
   mapPreview: {
     flex: 1,
@@ -191,13 +220,13 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#ffffff',
     borderRadius: 11,
-    backgroundColor: '#208AEF',
+    backgroundColor: Palette.raspberryRed,
   },
   eventCard: {
-    gap: 6,
+    gap: 5,
     padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    backgroundColor: '#FFF1E8',
   },
   bottomSheet: {
     position: 'absolute',
@@ -206,12 +235,75 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 72,
     maxWidth: 800,
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    paddingTop: 10,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    shadowColor: '#8C3A25',
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  bottomSheetCollapsed: {
+    minHeight: 76,
+    paddingBottom: 12,
+  },
+  bottomSheetExpanded: {
+    paddingBottom: 24,
+  },
+  sheetHandleArea: {
+    gap: 8,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#FFD0B8',
+  },
+  sheetHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sheetTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sheetTitle: {
+    color: Palette.ink,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  sheetMeta: {
+    color: Palette.vintageBerry,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  collapsedEventText: {
+    color: Palette.ink,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  eventCategory: {
+    color: Palette.teal,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  eventTitle: {
+    color: Palette.ink,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  eventMeta: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });

@@ -9,19 +9,31 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#2D201B',
+    background: '#FFF8F2',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#FFE3E3',
+    textSecondary: '#7D6258',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFF8F2',
+    background: '#241814',
+    backgroundElement: '#33221D',
+    backgroundSelected: '#603326',
+    textSecondary: '#E6C9BD',
   },
+} as const;
+
+export const Palette = {
+  sunflowerGold: '#FFAE6E',
+  raspberryRed: '#EC6530',
+  vintageBerry: '#8F463A',
+  teal: '#23898C',
+  frostedBlue: '#8FDDDF',
+  blush: '#FFE3E3',
+  cream: '#FFF8F2',
+  ink: '#2D201B',
+  paper: '#FFFFFF',
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;

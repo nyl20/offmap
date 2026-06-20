@@ -1,13 +1,13 @@
 import Mapbox from '@rnmapbox/maps';
 import { Link } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Colors, Palette } from '@/constants/theme';
 import { mockEvents } from '@/data/mock-events';
-import { isSupabaseConfigured } from '@/lib/supabase';
 import { useEventFilterStore } from '@/store/use-event-filter-store';
 import type { EventCategory, OffmapEvent } from '@/types/event';
 
@@ -28,6 +28,7 @@ if (mapboxAccessToken) {
 export function OffmapMap() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEventId, setSelectedEventId] = useState(initialEvent.id);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const categories = useEventFilterStore((state) => state.categories);
   const setCategories = useEventFilterStore((state) => state.setCategories);
   const freeOnly = useEventFilterStore((state) => state.freeOnly);
@@ -114,29 +115,56 @@ export function OffmapMap() {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView edges={['bottom']} style={styles.bottomSheet}>
-        <ThemedText type="smallBold">Nearby within {radiusMiles} miles</ThemedText>
-        {selectedEvent ? (
-          <Link href={`/event/${selectedEvent.id}`} asChild>
-            <Pressable style={styles.eventCard}>
-              <ThemedText type="smallBold">{selectedEvent.category.toUpperCase()}</ThemedText>
-              <ThemedText type="subtitle">{selectedEvent.title}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {selectedEvent.venueName} - {selectedEvent.price}
-              </ThemedText>
-            </Pressable>
-          </Link>
-        ) : (
-          <View style={styles.eventCard}>
-            <ThemedText type="smallBold">No events match these filters</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Try clearing search or filter chips.
-            </ThemedText>
+      <SafeAreaView
+        edges={['bottom']}
+        style={[styles.bottomSheet, sheetExpanded ? styles.bottomSheetExpanded : styles.bottomSheetCollapsed]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSheetExpanded((expanded) => !expanded)}
+          style={styles.sheetHandleArea}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeaderRow}>
+            <View style={styles.sheetTitleRow}>
+              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.teal} />
+              <ThemedText style={styles.sheetTitle}>Nearby events</ThemedText>
+            </View>
+            <SymbolView
+              name={{
+                ios: sheetExpanded ? 'chevron.down' : 'chevron.up',
+                web: sheetExpanded ? 'expand_more' : 'expand_less',
+              }}
+              size={16}
+              tintColor={Palette.vintageBerry}
+            />
           </View>
-        )}
-        <ThemedText type="small" themeColor="textSecondary">
-          Supabase: {isSupabaseConfigured ? 'configured' : 'add env vars in .env'}
-        </ThemedText>
+          {!sheetExpanded && selectedEvent ? (
+            <ThemedText numberOfLines={1} style={styles.collapsedEventText}>
+              {selectedEvent.title} - {selectedEvent.venueName}
+            </ThemedText>
+          ) : null}
+        </Pressable>
+
+        {sheetExpanded ? (
+          <>
+            <ThemedText style={styles.sheetMeta}>Within {radiusMiles} miles</ThemedText>
+            {selectedEvent ? (
+              <Link href={`/event/${selectedEvent.id}`} asChild>
+                <Pressable style={styles.eventCard}>
+                  <ThemedText style={styles.eventCategory}>{selectedEvent.category}</ThemedText>
+                  <ThemedText style={styles.eventTitle}>{selectedEvent.title}</ThemedText>
+                  <ThemedText style={styles.eventMeta}>
+                    {selectedEvent.venueName} - {selectedEvent.price}
+                  </ThemedText>
+                </Pressable>
+              </Link>
+            ) : (
+              <View style={styles.eventCard}>
+                <ThemedText style={styles.eventTitle}>No events match these filters</ThemedText>
+                <ThemedText style={styles.eventMeta}>Try clearing search or filter chips.</ThemedText>
+              </View>
+            )}
+          </>
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -186,6 +214,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    zIndex: 2,
     gap: 10,
     paddingHorizontal: 16,
   },
@@ -213,7 +242,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
   },
   filterChipActive: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E8FAFA',
   },
   marker: {
     width: 34,
@@ -229,22 +258,92 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#ffffff',
     borderRadius: 9,
-    backgroundColor: '#208AEF',
+    backgroundColor: Palette.raspberryRed,
   },
   eventCard: {
-    gap: 6,
+    gap: 5,
     padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    backgroundColor: '#FFF1E8',
   },
   bottomSheet: {
-    gap: 12,
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 86,
+    zIndex: 3,
+    alignSelf: 'center',
+    gap: 10,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    paddingTop: 10,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    shadowColor: '#8C3A25',
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  bottomSheetCollapsed: {
+    minHeight: 76,
+    paddingBottom: 12,
+  },
+  bottomSheetExpanded: {
+    paddingBottom: 24,
+  },
+  sheetHandleArea: {
+    gap: 8,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#FFD0B8',
+  },
+  sheetHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sheetTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sheetTitle: {
+    color: Palette.ink,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  sheetMeta: {
+    color: Palette.vintageBerry,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  collapsedEventText: {
+    color: Palette.ink,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  eventCategory: {
+    color: Palette.teal,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  eventTitle: {
+    color: Palette.ink,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  eventMeta: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   emptyState: {
     flex: 1,

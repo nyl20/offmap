@@ -21,6 +21,11 @@ export type OffmapEvent = {
   imageUrl?: string;
   sourceUrl?: string;
   price?: string;
+  sharedBy?: string;
+  sharedByHandle?: string;
+  heardAt?: string;
+  communityNote?: string;
+  confirmations?: number;
   tags: string[];
   createdAt: string;
 };
