@@ -1,0 +1,24 @@
+{
+  "name": "mapapp-pipeline",
+  "version": "1.0.0",
+  "description": "Event data pipeline for Mapbox activity map",
+  "type": "module",
+  "scripts": {
+    "migrate-sqlite": "node scripts/migrate-sqlite-to-supabase.js",
+    "intake": "node scripts/intake.js",
+    "geocode-pending": "node scripts/geocode-pending.js",
+    "backfill-categories": "node scripts/backfill-categories.js",
+    "serve": "node scripts/serve.js",
+    "scrape": "node scripts/scrape.js",
+    "scrape:instagram": "node scripts/scrape.js instagram --skip-geocode"
+  },
+  "dependencies": {
+    "@google/genai": "^2.10.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "cheerio": "^1.2.0",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2"
+  }
+}

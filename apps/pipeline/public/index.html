@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NYC Events Map</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+  <style>
+    /* ── Reset ─────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ──────────────────────────────────────────────────────────── */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #111;
+      color: #f0f0f0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header / Filters ───────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 16px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      flex: 1;
+    }
+
+    .filters select,
+    .filters input[type="date"],
+    .filters label {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #ddd;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .filters select:focus,
+    .filters input[type="date"]:focus { outline: 2px solid #4a90e2; }
+
+    .filters label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .filters input[type="checkbox"] {
+      accent-color: #4a90e2;
+      width: 14px;
+      height: 14px;
+    }
+
+    #count { font-size: 12px; color: #888; white-space: nowrap; }
+
+    /* ── Map ────────────────────────────────────────────────────────────── */
+    #map { flex: 1; }
+
+    /* ── Hover tooltip ──────────────────────────────────────────────────── */
+    .mapboxgl-popup-content {
+      background: rgba(18, 18, 18, 0.94);
+      color: #f0f0f0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      max-width: 220px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.4;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mapboxgl-popup-tip { border-top-color: rgba(18, 18, 18, 0.94) !important; }
+    .mapboxgl-popup-close-button { display: none; }
+
+    /* ── Event Detail Panel ─────────────────────────────────────────────── */
+    .event-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 380px;
+      height: 100%;
+      background: #1a1a1a;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translateX(calc(100% + 4px));
+      transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -6px 0 40px rgba(0, 0, 0, 0.7);
+    }
+
+    .event-panel.open { transform: translateX(0); }
+
+    /* ── Mobile bottom sheet ────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .event-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 80dvh;
+        transform: translateY(calc(100% + 4px));
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -6px 40px rgba(0, 0, 0, 0.7);
+      }
+      .event-panel.open { transform: translateY(0); }
+      .drag-handle { display: block; }
+      .toast { bottom: calc(80dvh + 12px); }
+    }
+
+    /* ── Drag handle (mobile visual cue) ────────────────────────────────── */
+    .drag-handle {
+      display: none;
+      width: 36px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      margin: 10px auto 0;
+      flex-shrink: 0;
+    }
+
+    /* ── Backdrop (mobile) ──────────────────────────────────────────────── */
+    .panel-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 299;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 300ms ease;
+    }
+
+    .panel-backdrop.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ── Hero image ─────────────────────────────────────────────────────── */
+    .panel-hero {
+      position: relative;
+      height: 200px;
+      flex-shrink: 0;
+      overflow: hidden;
+      background: #111;
+      transition: height 200ms ease;
+    }
+
+    .panel-hero.no-image { height: 130px; }
+
+    @media (max-width: 600px) {
+      .panel-hero { height: 160px; }
+      .panel-hero.no-image { height: 100px; }
+    }
+
+    /* Skeleton shimmer while image loads */
+    @keyframes shimmer {
+      0%   { background-position: -600px 0; }
+      100% { background-position:  600px 0; }
+    }
+
+    .panel-hero.loading .hero-placeholder {
+      background: linear-gradient(90deg, #1e1e1e 25%, #272727 50%, #1e1e1e 75%);
+      background-size: 600px 100%;
+      animation: shimmer 1.5s infinite;
+    }
+
+    .hero-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 300ms;
+    }
+
+    .placeholder-icon {
+      font-size: 28px;
+      opacity: 0.35;
+      line-height: 1;
+    }
+
+    .placeholder-category {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0.3;
+    }
+
+    .hero-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 350ms ease;
+    }
+
+    .hero-img.loaded { opacity: 1; }
+
+    /* Gradient overlay so bottom badges remain legible */
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.08) 0%,
+        rgba(0, 0, 0, 0.0) 40%,
+        rgba(0, 0, 0, 0.55) 100%
+      );
+      pointer-events: none;
+    }
+
+    /* ── Close button ───────────────────────────────────────────────────── */
+    .panel-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 30px;
+      height: 30px;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 50%;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      transition: background 150ms;
+    }
+
+    .panel-close:hover { background: rgba(0, 0, 0, 0.72); }
+    .panel-close:focus-visible { outline: 2px solid #4a90e2; outline-offset: 2px; }
+
+    /* ── Hero badges (overlaid on image bottom-left) ────────────────────── */
+    .hero-badges {
+      position: absolute;
+      bottom: 10px;
+      left: 12px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      z-index: 2;
+    }
+
+    /* ── Badges ─────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+
+    .badge-cat {
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(4px);
+    }
+
+    .badge-free {
+      background: rgba(39, 174, 96, 0.22);
+      color: #5cb85c;
+      border: 1px solid rgba(39, 174, 96, 0.28);
+    }
+
+    .badge-paid {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ccc;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .badge-price-unknown {
+      background: rgba(255, 255, 255, 0.04);
+      color: #666;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .badge-upcoming {
+      background: rgba(74, 144, 226, 0.18);
+      color: #5a9fe2;
+      border: 1px solid rgba(74, 144, 226, 0.25);
+    }
+
+    .badge-happening {
+      background: rgba(39, 174, 96, 0.18);
+      color: #5cb85c;
+      border: 1px solid rgba(39, 174, 96, 0.25);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    .badge-happening::before {
+      content: '●';
+      font-size: 7px;
+      vertical-align: 1px;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    .badge-ended {
+      background: rgba(255, 255, 255, 0.04);
+      color: #5a5a5a;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    /* ── Scrollable panel body ──────────────────────────────────────────── */
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
+    /* ── Title block ────────────────────────────────────────────────────── */
+    .panel-title-block {
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .panel-title {
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .price-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Expandable sections ────────────────────────────────────────────── */
+    .panel-section {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .section-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 16px;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      transition: background 140ms;
+      min-height: 44px; /* touch target */
+    }
+
+    .section-toggle:hover  { background: rgba(255, 255, 255, 0.03); }
+    .section-toggle:focus-visible { outline: 2px solid #4a90e2; outline-offset: -2px; }
+
+    .section-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 14px;
+      opacity: 0.5;
+      flex-shrink: 0;
+    }
+
+    .section-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-label {
+      font-size: 13px;
+      color: #c8c8c8;
+      line-height: 1.4;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .section-chevron {
+      color: #444;
+      font-size: 18px;
+      font-weight: 300;
+      flex-shrink: 0;
+      transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+      line-height: 1;
+    }
+
+    .section-toggle[aria-expanded="true"] .section-chevron {
+      transform: rotate(90deg);
+    }
+
+    /* Slide-down expand */
+    .section-content {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 260ms cubic-bezier(0.4, 0, 0.2, 1),
+                  padding   260ms cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 0 16px;
+    }
+
+    .section-content.expanded {
+      max-height: 280px;
+      padding: 2px 16px 14px;
+    }
+
+    /* ── Location expanded ──────────────────────────────────────────────── */
+    .full-address {
+      font-size: 13px;
+      color: #999;
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }
+
+    .map-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 11px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 8px;
+      color: #c8c8c8;
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 140ms;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1;
+    }
+
+    .action-btn:hover  { background: rgba(255, 255, 255, 0.13); color: #fff; }
+    .action-btn:focus-visible { outline: 2px solid #4a90e2; }
+
+    .action-btn.copied {
+      background: rgba(39, 174, 96, 0.18);
+      border-color: rgba(39, 174, 96, 0.28);
+      color: #5cb85c;
+    }
+
+    /* ── Time section ───────────────────────────────────────────────────── */
+    .time-detail {
+      font-size: 13px;
+      color: #999;
+      line-height: 1.65;
+      white-space: pre-line;
+    }
+
+    /* ── Description ────────────────────────────────────────────────────── */
+    .panel-desc-section {
+      padding: 11px 16px 13px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .panel-desc {
+      font-size: 13px;
+      color: #999;
+      line-height: 1.6;
+    }
+
+    .show-more-btn {
+      background: none;
+      border: none;
+      color: #4a90e2;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 5px 0 0;
+      display: block;
+      font-family: inherit;
+    }
+
+    .show-more-btn:hover { text-decoration: underline; }
+
+    /* ── Ratings (hidden until data available) ──────────────────────────── */
+    .panel-ratings-section {
+      padding: 11px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .ratings-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .rating-stars { color: #e8a020; font-size: 14px; letter-spacing: 1px; }
+    .rating-score { font-size: 14px; font-weight: 600; color: #fff; }
+    .rating-count { font-size: 12px; color: #666; }
+
+    /* ── Tags ───────────────────────────────────────────────────────────── */
+    .panel-tags-section {
+      padding: 10px 16px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .tag-pill {
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #888;
+    }
+
+    /* ── Footer / CTA ───────────────────────────────────────────────────── */
+    .panel-footer {
+      padding: 14px 16px 20px;
+    }
+
+    .panel-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      width: 100%;
+      padding: 12px;
+      background: #4a90e2;
+      color: #fff;
+      text-align: center;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 150ms;
+    }
+
+    .panel-cta:hover  { background: #5a9fe2; }
+    .panel-cta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+    .panel-source {
+      text-align: center;
+      font-size: 11px;
+      color: #444;
+      margin-top: 9px;
+    }
+
+    /* ── Toast ──────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(72px);
+      background: rgba(28, 28, 28, 0.96);
+      color: #f0f0f0;
+      padding: 9px 20px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 1000;
+      transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity   280ms;
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>NYC Events</h1>
+    <div class="filters">
+      <select id="filter-category">
+        <option value="">All categories</option>
+      </select>
+      <input type="date" id="filter-from" title="From date" />
+      <input type="date" id="filter-to"   title="To date" />
+      <label><input type="checkbox" id="filter-free" /> Free only</label>
+    </div>
+    <span id="count"></span>
+  </header>
+
+  <div id="map"></div>
+
+  <!-- ── Event detail panel ─────────────────────────────────────────────── -->
+  <div id="event-panel"
+       class="event-panel"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="panel-title"
+       aria-hidden="true">
+
+    <div class="drag-handle" aria-hidden="true"></div>
+
+    <!-- Hero -->
+    <div class="panel-hero" id="panel-hero">
+      <div class="hero-placeholder" id="hero-placeholder">
+        <div class="placeholder-icon"     id="placeholder-icon"></div>
+        <div class="placeholder-category" id="placeholder-cat"></div>
+      </div>
+      <img class="hero-img" id="hero-img" src="" alt="" />
+      <div class="hero-overlay"></div>
+      <button class="panel-close" id="panel-close" aria-label="Close event details">✕</button>
+      <div class="hero-badges">
+        <span class="badge badge-cat" id="badge-cat"></span>
+      </div>
+    </div>
+
+    <!-- Scrollable content -->
+    <div class="panel-body">
+
+      <!-- Title + price -->
+      <div class="panel-title-block">
+        <h2 class="panel-title" id="panel-title">Loading…</h2>
+        <div class="price-row">
+          <span class="badge" id="badge-price"></span>
+        </div>
+      </div>
+
+      <!-- Location (expandable) -->
+      <div class="panel-section">
+        <button class="section-toggle"
+                id="toggle-location"
+                aria-expanded="false"
+                aria-controls="content-location">
+          <span class="section-icon" aria-hidden="true">◎</span>
+          <div class="section-main">
+            <span class="section-label" id="location-label"></span>
+          </div>
+          <span class="section-chevron" aria-hidden="true">›</span>
+        </button>
+        <div class="section-content" id="content-location" role="region" aria-label="Location details">
+          <p class="full-address" id="full-address"></p>
+          <div class="map-actions">
+            <a  class="action-btn" id="btn-gmaps" href="#" target="_blank" rel="noopener">Google Maps</a>
+            <a  class="action-btn" id="btn-amaps" href="#" target="_blank" rel="noopener">Apple Maps</a>
+            <button class="action-btn" id="btn-copy">Copy Address</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time (expandable) -->
+      <div class="panel-section">
+        <button class="section-toggle"
+                id="toggle-time"
+                aria-expanded="false"
+                aria-controls="content-time">
+          <span class="section-icon" aria-hidden="true">◷</span>
+          <div class="section-main">
+            <span class="section-label" id="time-label"></span>
+            <span class="badge" id="badge-status"></span>
+          </div>
+          <span class="section-chevron" aria-hidden="true">›</span>
+        </button>
+        <div class="section-content" id="content-time" role="region" aria-label="Date and time details">
+          <p class="time-detail" id="time-detail"></p>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="panel-desc-section" id="section-desc">
+        <p class="panel-desc"   id="panel-desc"></p>
+        <button class="show-more-btn" id="btn-show-more">Show more</button>
+      </div>
+
+      <!-- Ratings — hidden until a reviews source is wired up -->
+      <div class="panel-ratings-section" id="section-ratings" style="display:none" aria-hidden="true">
+        <div class="ratings-row">
+          <span class="rating-stars" id="rating-stars"></span>
+          <span class="rating-score" id="rating-score"></span>
+          <span class="rating-count" id="rating-count"></span>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div class="panel-tags-section" id="section-tags"></div>
+
+      <!-- CTA + source attribution -->
+      <div class="panel-footer">
+        <a class="panel-cta" id="panel-cta" href="#" target="_blank" rel="noopener">
+          View event ↗
+        </a>
+        <p class="panel-source" id="panel-source"></p>
+      </div>
+
+    </div><!-- /.panel-body -->
+  </div><!-- /.event-panel -->
+
+  <!-- Mobile backdrop -->
+  <div class="panel-backdrop" id="panel-backdrop" aria-hidden="true"></div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const MAPBOX_TOKEN = '__MAPBOX_TOKEN__';
+
+    /* ── Category metadata ─────────────────────────────────────────────── */
+    const CAT_COLORS = {
+      Music:      '#9b59b6', Art:        '#e74c3c', Food:      '#e67e22',
+      Sports:     '#2980b9', Film:       '#8e44ad', Nature:    '#27ae60',
+      Market:     '#16a085', Festival:   '#f39c12', Family:    '#2980b9',
+      Wellness:   '#1abc9c', Education:  '#3498db', Community: '#95a5a6',
+      Nightlife:  '#8e44ad', Events:     '#7f8c8d',
+    };
+
+    const CAT_ICONS = {
+      Music: '♪', Art: '◈', Food: '●', Sports: '◎', Film: '▷',
+      Nature: '✿', Market: '◈', Festival: '●', Family: '◎',
+      Wellness: '◈', Nightlife: '♪',
+    };
+    const DEFAULT_ICON  = '◈';
+    const DEFAULT_COLOR = '#4a90e2';
+
+    /* ── Utilities: text ───────────────────────────────────────────────── */
+    function escHtml(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function cleanText(raw) {
+      if (!raw) return '';
+      // Strip tags via regex rather than round-tripping through innerHTML —
+      // an <img onerror=...> in scraped/user-submitted text would still fire
+      // its inline handler even on a never-attached element.
+      return raw.replace(/<br\s*\/?>/gi, ' ')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+    }
+
+    function truncate(str, max) {
+      if (str.length <= max) return { text: str, clipped: false };
+      const cut = str.slice(0, max).replace(/\s\S*$/, '') || str.slice(0, max);
+      return { text: cut + '…', clipped: true };
+    }
+
+    /* ── Utilities: date/time ──────────────────────────────────────────── */
+    function shortDateTime(iso, tz) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric',
+          hour: 'numeric', minute: '2-digit',
+          timeZone: tz || 'America/New_York',
+        });
+      } catch { return iso; }
+    }
+
+    function detailedDateTime(startISO, endISO, tz) {
+      if (!startISO) return '';
+      try {
+        const zone = tz || 'America/New_York';
+        const opts = {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone: zone,
+        };
+        const start = new Date(startISO);
+        let out = start.toLocaleString('en-US', opts);
+
+        if (endISO) {
+          const end     = new Date(endISO);
+          const sameDay = start.toLocaleDateString('en-US', { timeZone: zone }) ===
+                            end.toLocaleDateString('en-US', { timeZone: zone });
+          if (sameDay) {
+            out += ' – ' + end.toLocaleTimeString('en-US', {
+              hour: 'numeric', minute: '2-digit', timeZone: zone,
+            });
+          } else {
+            out += '\n– ' + end.toLocaleString('en-US', opts);
+          }
+        }
+        return out;
+      } catch { return startISO; }
+    }
+
+    function eventStatus(startISO, endISO) {
+      if (!startISO) return null;
+      const now = Date.now();
+      const s   = new Date(startISO).getTime();
+      const e   = endISO ? new Date(endISO).getTime() : null;
+      if (now < s) return 'upcoming';
+      if (e && now > e) return 'ended';
+      return 'happening';
+    }
+
+    /* ── Utilities: pricing ────────────────────────────────────────────── */
+    function parsePricing(priceText, isFree) {
+      const free = isFree === true || isFree === 1 || isFree === 'true';
+      if (free) return { cls: 'badge-free', text: 'Free' };
+      if (!priceText) return { cls: 'badge-price-unknown', text: 'Price Unknown' };
+      const pt = String(priceText).trim();
+      if (/free/i.test(pt)) return { cls: 'badge-free', text: 'Free' };
+      const range = pt.match(/\$(\d+(?:\.\d{1,2})?)\s*[–\-]\s*\$?(\d+(?:\.\d{1,2})?)/);
+      if (range) return { cls: 'badge-paid', text: `$${range[1]}–$${range[2]}` };
+      const from = pt.match(/\$(\d+(?:\.\d{1,2})?)\+/);
+      if (from)  return { cls: 'badge-paid', text: `From $${from[1]}` };
+      const single = pt.match(/\$(\d+(?:\.\d{1,2})?)/);
+      if (single) return { cls: 'badge-paid', text: `$${single[1]}` };
+      return { cls: 'badge-paid', text: pt.slice(0, 24) };
+    }
+
+    /* ── Utilities: location label ─────────────────────────────────────── */
+    function locationLabel(p) {
+      if (p.neighborhood) return p.neighborhood;
+      const name = p.venue_name;
+      if (name && name !== 'New York City' && name !== 'New York, NY' && name.length > 2) {
+        return name;
+      }
+      const addr = p.venue_address ?? '';
+      const parts = addr.split(',');
+      return parts.length >= 2 ? parts[1].trim() : (parts[0].trim() || 'New York City');
+    }
+
+    /* ── Toast ─────────────────────────────────────────────────────────── */
+    let _toastTimer;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('visible');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('visible'), 2600);
+    }
+
+    /* ── Panel state ───────────────────────────────────────────────────── */
+    let _panelOpen = false;
+    let _fullDesc  = '';
+
+    function openPanel(props) {
+      populate(props);
+      document.getElementById('event-panel').classList.add('open');
+      document.getElementById('event-panel').setAttribute('aria-hidden', 'false');
+      document.getElementById('panel-backdrop').classList.add('visible');
+      _panelOpen = true;
+      setTimeout(() => document.getElementById('panel-close').focus(), 320);
+    }
+
+    function closePanel() {
+      document.getElementById('event-panel').classList.remove('open');
+      document.getElementById('event-panel').setAttribute('aria-hidden', 'true');
+      document.getElementById('panel-backdrop').classList.remove('visible');
+      _panelOpen = false;
+      // Collapse sections
+      ['content-location', 'content-time'].forEach(id => {
+        document.getElementById(id).classList.remove('expanded');
+      });
+      document.getElementById('toggle-location').setAttribute('aria-expanded', 'false');
+      document.getElementById('toggle-time').setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleSection(contentId, toggleId) {
+      const content  = document.getElementById(contentId);
+      const toggle   = document.getElementById(toggleId);
+      const expanded = toggle.getAttribute('aria-expanded') === 'true';
+      content.classList.toggle('expanded', !expanded);
+      toggle.setAttribute('aria-expanded', String(!expanded));
+    }
+
+    /* ── Populate panel ────────────────────────────────────────────────── */
+    function populate(p) {
+      const cat      = p.category || '';
+      const color    = CAT_COLORS[cat]  || DEFAULT_COLOR;
+      const icon     = CAT_ICONS[cat]   || DEFAULT_ICON;
+
+      /* Hero image */
+      const hero = document.getElementById('panel-hero');
+      const img  = document.getElementById('hero-img');
+      const ph   = document.getElementById('hero-placeholder');
+
+      // Clear stale handlers first — setting src="" can trigger a same-document
+      // fetch in some browsers, firing a leftover onload/onerror from the
+      // previously-displayed event's image.
+      img.onload  = null;
+      img.onerror = null;
+      img.classList.remove('loaded');
+      img.removeAttribute('src');
+      hero.classList.remove('no-image', 'loading');
+
+      ph.style.background = `linear-gradient(135deg, ${color}40 0%, ${color}18 100%)`;
+      document.getElementById('placeholder-icon').textContent = icon;
+      document.getElementById('placeholder-cat').textContent  = cat;
+
+      if (p.image_url) {
+        hero.classList.add('loading');
+        img.alt     = p.title || '';
+        img.onload  = () => { img.classList.add('loaded'); hero.classList.remove('loading'); };
+        img.onerror = () => { img.removeAttribute('src'); hero.classList.add('no-image'); hero.classList.remove('loading'); };
+        img.src = p.image_url;
+      } else {
+        hero.classList.add('no-image');
+      }
+
+      /* Category badge */
+      const catBadge = document.getElementById('badge-cat');
+      catBadge.textContent = cat;
+      catBadge.style.display = cat ? '' : 'none';
+
+      /* Title */
+      document.getElementById('panel-title').textContent = p.title || 'Untitled';
+
+      /* Price badge */
+      const price = parsePricing(p.price_text, p.is_free);
+      const pb    = document.getElementById('badge-price');
+      pb.textContent = price.text;
+      pb.className   = `badge ${price.cls}`;
+
+      /* Location */
+      const locQ    = encodeURIComponent(`${p.venue_name ? p.venue_name + ', ' : ''}${p.venue_address || ''}`);
+      document.getElementById('location-label').textContent = locationLabel(p);
+      document.getElementById('full-address').textContent   = p.venue_address || '';
+      document.getElementById('btn-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${locQ}`;
+      document.getElementById('btn-amaps').href = `https://maps.apple.com/?q=${locQ}`;
+
+      const copyBtn = document.getElementById('btn-copy');
+      copyBtn.textContent = 'Copy Address';
+      copyBtn.classList.remove('copied');
+      copyBtn.onclick = async () => {
+        const text = p.venue_address || '';
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const ta = document.createElement('textarea');
+          Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        showToast('Address copied to clipboard');
+        setTimeout(() => { copyBtn.textContent = 'Copy Address'; copyBtn.classList.remove('copied'); }, 2600);
+      };
+
+      /* Time + status */
+      const status = eventStatus(p.start_time, p.end_time);
+      document.getElementById('time-label').textContent = shortDateTime(p.start_time, p.timezone);
+
+      const sb = document.getElementById('badge-status');
+      const statusMap = {
+        upcoming: ['badge-upcoming',  'Upcoming'],
+        happening:['badge-happening', 'Happening Now'],
+        ended:    ['badge-ended',     'Ended'],
+      };
+      if (status && statusMap[status]) {
+        const [cls, label] = statusMap[status];
+        sb.className   = `badge ${cls}`;
+        sb.textContent = label;
+        sb.style.display = '';
+      } else {
+        sb.style.display = 'none';
+      }
+
+      document.getElementById('time-detail').textContent =
+        detailedDateTime(p.start_time, p.end_time, p.timezone);
+
+      /* Description */
+      const raw      = cleanText(p.description);
+      _fullDesc      = raw;
+      const descSect = document.getElementById('section-desc');
+      const descEl   = document.getElementById('panel-desc');
+      const smBtn    = document.getElementById('btn-show-more');
+
+      if (raw) {
+        descSect.style.display = '';
+        const { text, clipped } = truncate(raw, 150);
+        descEl.textContent = text;
+        if (clipped) {
+          smBtn.style.display = '';
+          smBtn.textContent   = 'Show more';
+          let exp = false;
+          smBtn.onclick = () => {
+            exp = !exp;
+            descEl.textContent = exp ? _fullDesc : truncate(_fullDesc, 150).text;
+            smBtn.textContent  = exp ? 'Show less' : 'Show more';
+          };
+        } else {
+          smBtn.style.display = 'none';
+        }
+      } else {
+        descSect.style.display = 'none';
+      }
+
+      /* Ratings — hidden (no data from current scrapers) */
+      document.getElementById('section-ratings').style.display = 'none';
+
+      /* Tags */
+      const tags    = (() => {
+        const raw = p.tags;
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        try { return JSON.parse(raw); } catch { return []; }
+      })();
+      const tagsSect = document.getElementById('section-tags');
+      if (tags.length) {
+        tagsSect.style.display = '';
+        tagsSect.innerHTML = '';
+        tags.slice(0, 10).forEach(t => {
+          const s = document.createElement('span');
+          s.className   = 'tag-pill';
+          s.textContent = t;
+          tagsSect.appendChild(s);
+        });
+      } else {
+        tagsSect.style.display = 'none';
+      }
+
+      /* CTA */
+      const cta = document.getElementById('panel-cta');
+      if (p.source_url) {
+        cta.href         = p.source_url;
+        cta.style.display = '';
+      } else {
+        cta.style.display = 'none';
+      }
+
+      /* Source attribution */
+      const srcEl = document.getElementById('panel-source');
+      if (p.source_name) {
+        srcEl.textContent  = `via ${p.source_name}`;
+        srcEl.style.display = '';
+      } else {
+        srcEl.style.display = 'none';
+      }
+
+      /* Scroll body to top */
+      document.querySelector('.panel-body').scrollTop = 0;
+    }
+
+    /* ── Panel event wiring ────────────────────────────────────────────── */
+    document.getElementById('panel-close')   .addEventListener('click', closePanel);
+    document.getElementById('panel-backdrop').addEventListener('click', closePanel);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && _panelOpen) closePanel(); });
+
+    document.getElementById('toggle-location').addEventListener('click', () =>
+      toggleSection('content-location', 'toggle-location'));
+    document.getElementById('toggle-time').addEventListener('click', () =>
+      toggleSection('content-time', 'toggle-time'));
+
+    /* ── Mapbox ────────────────────────────────────────────────────────── */
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style:     'mapbox://styles/mapbox/dark-v11',
+      center:    [-73.975, 40.718],
+      zoom:      11,
+      maxBounds: [[-74.40, 40.35], [-73.50, 41.10]],
+    });
+    window.map = map; // exposed for debugging/console access
+
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new mapboxgl.GeolocateControl({ trackUserLocation: false }), 'top-right');
+
+    /* Hover tooltip (lightweight — title only) */
+    const hoverTip = new mapboxgl.Popup({ offset: 12, closeButton: false, closeOnClick: false });
+
+    map.on('mouseenter', 'unclustered-point', e => {
+      map.getCanvas().style.cursor = 'pointer';
+      hoverTip
+        .setLngLat(e.features[0].geometry.coordinates.slice())
+        .setHTML(`<span style="font-weight:600">${escHtml(e.features[0].properties.title)}</span>`)
+        .addTo(map);
+    });
+
+    map.on('mouseleave', 'unclustered-point', () => {
+      map.getCanvas().style.cursor = '';
+      hoverTip.remove();
+    });
+
+    /* ── State & data ──────────────────────────────────────────────────── */
+    function buildQuery() {
+      const params = new URLSearchParams({ status: 'candidate' });
+      const cat  = document.getElementById('filter-category').value;
+      const from = document.getElementById('filter-from').value;
+      const to   = document.getElementById('filter-to').value;
+      const free = document.getElementById('filter-free').checked;
+      if (cat)  params.set('category', cat);
+      if (from) params.set('from', from + 'T00:00:00');
+      if (to)   params.set('to',   to   + 'T23:59:59');
+      if (free) params.set('is_free', 'true');
+      return params.toString();
+    }
+
+    async function loadEvents() {
+      const res     = await fetch('/api/events?' + buildQuery());
+      const geojson = await res.json();
+      const n       = geojson.features.length;
+      document.getElementById('count').textContent = n + ' event' + (n !== 1 ? 's' : '');
+      return geojson;
+    }
+
+    async function refreshMap() {
+      const geojson = await loadEvents();
+      const src     = map.getSource('events');
+      if (src) { src.setData(geojson); } else { addLayers(geojson); }
+    }
+
+    function addLayers(geojson) {
+      map.addSource('events', {
+        type: 'geojson', data: geojson,
+        cluster: true, clusterMaxZoom: 13, clusterRadius: 48,
+      });
+
+      map.addLayer({
+        id: 'clusters', type: 'circle', source: 'events',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color':   ['step', ['get', 'point_count'], '#4a90e2', 10, '#e07b39', 30, '#d94f4f'],
+          'circle-radius':  ['step', ['get', 'point_count'], 18, 10, 24, 30, 30],
+          'circle-opacity': 0.88,
+        },
+      });
+
+      map.addLayer({
+        id: 'cluster-count', type: 'symbol', source: 'events',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-size':  13,
+          'text-font':  ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+        },
+        paint: { 'text-color': '#fff' },
+      });
+
+      map.addLayer({
+        id: 'unclustered-point', type: 'circle', source: 'events',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': [
+            'match', ['get', 'category'],
+            'Music',    '#9b59b6', 'Food',    '#e67e22',
+            'Market',   '#27ae60', 'Art',     '#e74c3c',
+            'Sports',   '#2980b9', 'Film',    '#8e44ad',
+            'Nightlife','#8e44ad', 'Nature',  '#27ae60',
+            '#4a90e2'
+          ],
+          'circle-radius':       7,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#fff',
+          'circle-opacity':      0.9,
+        },
+      });
+    }
+
+    /* Click → open panel */
+    map.on('click', 'unclustered-point', e => {
+      hoverTip.remove();
+      openPanel(e.features[0].properties);
+    });
+
+    /* Click cluster → expand */
+    map.on('click', 'clusters', e => {
+      const features  = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+      const clusterId = features[0].properties.cluster_id;
+      map.getSource('events').getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (!err) map.easeTo({ center: features[0].geometry.coordinates, zoom });
+      });
+    });
+
+    map.on('mouseenter', 'clusters', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'clusters', () => map.getCanvas().style.cursor = '');
+
+    /* ── Filters ───────────────────────────────────────────────────────── */
+    async function loadCategories() {
+      try {
+        const cats = await (await fetch('/api/categories')).json();
+        const sel  = document.getElementById('filter-category');
+        cats.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = opt.textContent = c;
+          sel.appendChild(opt);
+        });
+      } catch {}
+    }
+
+    ['filter-category', 'filter-from', 'filter-to', 'filter-free'].forEach(id =>
+      document.getElementById(id).addEventListener('change', refreshMap));
+
+    /* ── Boot ──────────────────────────────────────────────────────────── */
+    map.on('load', async () => {
+      await loadCategories();
+      await refreshMap();
+    });
+  </script>
+</body>
+</html>
