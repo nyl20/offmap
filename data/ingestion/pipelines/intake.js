@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { ingestCsv } from '../src/intake/csv-intake.js';
+import { ingestCsv } from '../intake/csv-intake.js';
 
 const [, , csvPath] = process.argv;
 

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { runScrapers } from '../src/scrapers/runner.js';
+import { runScrapers } from './runner.js';
 
 const args        = process.argv.slice(2);
 const skipGeocode = args.includes('--skip-geocode');

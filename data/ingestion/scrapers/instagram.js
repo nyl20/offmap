@@ -2,15 +2,15 @@ import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { dirname, join, extname } from 'path';
 import { fileURLToPath } from 'url';
-import { extractMedia } from '../instagram/extractMedia.js';
-import { parseEvent } from '../instagram/parseEvent.js';
+import { extractMedia } from './instagram/extractMedia.js';
+import { parseEvent } from './instagram/parseEvent.js';
 
 export const name = 'instagram';
 export const envKey = 'INSTAGRAM_USERNAME';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FETCH_SCRIPT = join(__dirname, '..', 'instagram', 'fetch.py');
-const PROJECT_ROOT = join(__dirname, '..', '..');
+const FETCH_SCRIPT = join(__dirname, 'instagram', 'fetch.py');
+const PROJECT_ROOT = join(__dirname, '..');
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 

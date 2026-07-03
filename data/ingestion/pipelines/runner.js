@@ -1,26 +1,26 @@
 import { getDb } from '../db/supabase.js';
 import { upsertVenue, insertEvent, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores } from '../db/funnel.js';
 import { geocodePendingVenues, backfillNeighborhoods } from '../geocoding/mapbox.js';
-import { isExcludedAudience } from './utils.js';
-import * as reddit        from './reddit.js';
-import * as bbg           from './bbg.js';
-import * as moma          from './moma.js';
-import * as timeout       from './timeout.js';
-import * as theskint      from './theskint.js';
-import * as untappedcities from './untappedcities.js';
-import * as luma          from './luma.js';
-import * as partiful      from './partiful.js';
-import * as eventbrite      from './eventbrite.js';
-import * as dice            from './dice.js';
-import * as thrillist       from './thrillist.js';
-import * as donyc           from './donyc.js';
-import * as nycparks        from './nycparks.js';
-import * as residentadvisor from './residentadvisor.js';
-import * as nycopendata     from './nycopendata.js';
-import * as brooklynmuseum  from './brooklynmuseum.js';
-import * as met             from './met.js';
-import * as museums         from './museums.js';
-import * as instagram        from './instagram.js';
+import { isExcludedAudience } from '../scrapers/utils.js';
+import * as reddit        from '../scrapers/reddit.js';
+import * as bbg           from '../scrapers/bbg.js';
+import * as moma          from '../scrapers/moma.js';
+import * as timeout       from '../scrapers/timeout.js';
+import * as theskint      from '../scrapers/theskint.js';
+import * as untappedcities from '../scrapers/untappedcities.js';
+import * as luma          from '../scrapers/luma.js';
+import * as partiful      from '../scrapers/partiful.js';
+import * as eventbrite      from '../scrapers/eventbrite.js';
+import * as dice            from '../scrapers/dice.js';
+import * as thrillist       from '../scrapers/thrillist.js';
+import * as donyc           from '../scrapers/donyc.js';
+import * as nycparks        from '../scrapers/nycparks.js';
+import * as residentadvisor from '../scrapers/residentadvisor.js';
+import * as nycopendata     from '../scrapers/nycopendata.js';
+import * as brooklynmuseum  from '../scrapers/brooklynmuseum.js';
+import * as met             from '../scrapers/met.js';
+import * as museums         from '../scrapers/museums.js';
+import * as instagram        from '../scrapers/instagram.js';
 
 const SCRAPERS = [
   reddit, bbg, moma, timeout,
