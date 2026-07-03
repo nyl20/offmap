@@ -10,7 +10,8 @@
     "backfill-categories": "node pipelines/backfill-categories.js",
     "serve": "node pipelines/serve.js",
     "scrape": "node pipelines/scrape.js",
-    "scrape:instagram": "node pipelines/scrape.js instagram --skip-geocode"
+    "scrape:instagram": "node pipelines/scrape.js instagram --skip-geocode",
+    "scrape:venues": "node pipelines/scrape.js local-spots --skip-geocode"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

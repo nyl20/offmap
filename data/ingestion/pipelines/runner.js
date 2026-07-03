@@ -19,7 +19,7 @@ import * as residentadvisor from '../scrapers/residentadvisor.js';
 import * as nycopendata     from '../scrapers/nycopendata.js';
 import * as brooklynmuseum  from '../scrapers/brooklynmuseum.js';
 import * as met             from '../scrapers/met.js';
-import * as museums         from '../scrapers/museums.js';
+import * as localSpots      from '../scrapers/local-spots.js';
 import * as instagram        from '../scrapers/instagram.js';
 
 const SCRAPERS = [
@@ -27,7 +27,8 @@ const SCRAPERS = [
   theskint, untappedcities, luma, partiful,
   eventbrite, dice, thrillist,
   donyc, nycparks, residentadvisor, nycopendata,
-  brooklynmuseum, met, museums,
+  brooklynmuseum, met,
+  localSpots,
   instagram,
 ];
 
@@ -96,6 +97,18 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
               .is('neighborhood', null);
             if (nbError) throw new Error(nbError.message);
           }
+
+          // Mark all venueOnly scraper results as permanent establishments and
+          // write any enrichment fields the scraper supplied (website, description,
+          // image, phone). Always overwrites so re-runs refresh stale data.
+          const extra = { is_permanent: true };
+          if (row.website_url) extra.website_url = row.website_url;
+          if (row.description) extra.description = row.description;
+          if (row.image_url)   extra.image_url   = row.image_url;
+          if (row.phone)       extra.phone        = row.phone;
+          const { error: extraErr } = await db.from('venues').update(extra).eq('id', venueId);
+          if (extraErr) throw new Error(extraErr.message);
+
           summary.inserted++;
         } catch (rowErr) {
           summary.skipped++;

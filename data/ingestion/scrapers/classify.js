@@ -43,6 +43,8 @@ const CATEGORY_ALIASES = {
   festival: 'Community & Culture',
   film: 'Arts & Performance',
   community: 'Community & Culture',
+  shop:      'Shopping',
+  craft:     'Arts & Crafts',
 };
 
 // Phrases that always resolve to a fixed multi-category + sub-category pair,
