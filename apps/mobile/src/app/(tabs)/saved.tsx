@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Palette } from '@/constants/theme';
 import { mockEvents } from '@/data/mock-events';
 
 export default function SavedScreen() {
@@ -50,7 +51,9 @@ const styles = StyleSheet.create({
   savedCard: {
     gap: 8,
     padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    borderColor: Palette.hotPink,
+    borderWidth: 2,
+    backgroundColor: Palette.paper,
   },
 });

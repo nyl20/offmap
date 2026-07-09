@@ -9,7 +9,7 @@ import { Palette } from '@/constants/theme';
 import { mockEvents } from '@/data/mock-events';
 import type { OffmapEvent } from '@/types/event';
 
-const photoAccents = [Palette.frostedBlue, Palette.sunflowerGold, Palette.vintageBerry];
+const photoAccents = [Palette.electricPurple, Palette.hotPink, Palette.posterOrange];
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,7 +34,7 @@ export default function EventDetailScreen() {
             <ThemedText style={styles.categoryLabel}>{event.category}</ThemedText>
             <ThemedText style={styles.title}>{event.title}</ThemedText>
             <View style={styles.venueRow}>
-              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.teal} />
+              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.hotPink} />
               <ThemedText numberOfLines={2} style={styles.venueText}>
                 {event.venueName} - {event.address}
               </ThemedText>
@@ -105,7 +105,7 @@ export default function EventDetailScreen() {
                 onPress={() => Linking.openURL(event.sourceUrl!)}
                 style={styles.externalLink}>
                 <View style={styles.externalIcon}>
-                  <SymbolView name={{ ios: 'safari', web: 'search' }} size={17} tintColor={Palette.teal} />
+                  <SymbolView name={{ ios: 'safari', web: 'search' }} size={17} tintColor={Palette.paper} />
                 </View>
                 <View style={styles.externalCopy}>
                   <ThemedText style={styles.externalTitle}>Official website</ThemedText>
@@ -145,7 +145,7 @@ function Fact({
   return (
     <View style={styles.factCard}>
       <View style={styles.factIcon}>
-        <SymbolView name={icon} size={17} tintColor={Palette.vintageBerry} />
+        <SymbolView name={icon} size={17} tintColor={Palette.paper} />
       </View>
       <ThemedText style={styles.factLabel}>{label}</ThemedText>
       <ThemedText numberOfLines={2} style={styles.factValue}>
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   heroImage: {
     height: 220,
     overflow: 'hidden',
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: Palette.teal,
   },
   heroGlow: {
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     width: 122,
     height: 122,
     borderRadius: 61,
-    backgroundColor: Palette.blush,
+    backgroundColor: Palette.posterOrange,
   },
   heroStage: {
     position: 'absolute',
@@ -231,11 +231,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 78,
-    backgroundColor: 'rgba(36, 25, 30, 0.24)',
+    backgroundColor: 'rgba(26, 5, 162, 0.34)',
   },
   heroShape: {
     position: 'absolute',
-    borderRadius: 18,
+    borderRadius: 8,
   },
   heroShapeOne: {
     left: 30,
@@ -264,15 +264,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryLabel: {
-    color: Palette.teal,
+    color: Palette.hotPink,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     textTransform: 'capitalize',
   },
   title: {
     color: Palette.ink,
     fontSize: 34,
-    fontWeight: '700',
+    fontWeight: '800',
     lineHeight: 38,
   },
   venueRow: {
@@ -303,10 +303,10 @@ const styles = StyleSheet.create({
     minHeight: 116,
     gap: 8,
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 10,
     backgroundColor: Palette.paper,
-    borderColor: '#FFD0B8',
-    borderWidth: 1,
+    borderColor: Palette.posterOrange,
+    borderWidth: 2,
   },
   factIcon: {
     alignItems: 'center',
@@ -314,12 +314,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Palette.blush,
+    backgroundColor: Palette.electricPurple,
   },
   factLabel: {
-    color: Palette.vintageBerry,
+    color: Palette.hotPink,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   factValue: {
     color: Palette.ink,
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: Palette.ink,
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     lineHeight: 28,
   },
   bodyText: {
@@ -351,21 +351,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#E8FAFA',
+    backgroundColor: Palette.electricPurple,
   },
   tagText: {
-    color: Palette.teal,
+    color: Palette.paper,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   sharedNote: {
     flexDirection: 'row',
     gap: 12,
     padding: 14,
-    borderRadius: 18,
-    backgroundColor: '#FFFDF7',
-    borderColor: '#FFD0B8',
-    borderWidth: 1,
+    borderRadius: 10,
+    backgroundColor: Palette.plum,
+    borderColor: Palette.hotPink,
+    borderWidth: 2,
   },
   sharedAvatar: {
     alignItems: 'center',
@@ -373,10 +373,10 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Palette.sunflowerGold,
+    backgroundColor: Palette.posterOrange,
   },
   sharedAvatarText: {
-    color: Palette.ink,
+    color: Palette.paper,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -385,25 +385,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sharedTitle: {
-    color: Palette.ink,
+    color: Palette.paper,
     fontSize: 15,
     fontWeight: '700',
     lineHeight: 20,
   },
   sharedMeta: {
-    color: Palette.vintageBerry,
+    color: '#FFD8C3',
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 17,
   },
   sharedBody: {
-    color: Palette.ink,
+    color: Palette.paper,
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 21,
   },
   confirmedText: {
-    color: Palette.teal,
+    color: Palette.posterOrange,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     width: 210,
     height: 144,
     overflow: 'hidden',
-    borderRadius: 18,
+    borderRadius: 10,
   },
   photoShade: {
     position: 'absolute',
@@ -466,10 +466,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 10,
     backgroundColor: Palette.paper,
-    borderColor: '#FFD0B8',
-    borderWidth: 1,
+    borderColor: Palette.hotPink,
+    borderWidth: 2,
   },
   externalIcon: {
     alignItems: 'center',
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#E8FAFA',
+    backgroundColor: Palette.electricPurple,
   },
   externalCopy: {
     flex: 1,
@@ -486,10 +486,10 @@ const styles = StyleSheet.create({
   externalTitle: {
     color: Palette.ink,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   externalUrl: {
-    color: Palette.vintageBerry,
+    color: Palette.hotPink,
     fontSize: 12,
     fontWeight: '500',
   },

@@ -1,764 +1,909 @@
 import { Link } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { mockEvents } from '@/data/mock-events';
-import type { OffmapEvent } from '@/types/event';
+import type { EventCategory, OffmapEvent } from '@/types/event';
 
-const featuredEvents = mockEvents.slice(0, 2);
-const todayEvents = mockEvents.slice(2, 4);
-const recommendedEvents = mockEvents.slice(4);
-
-const categoryColors: Record<OffmapEvent['category'], string> = {
-  art: Palette.raspberryRed,
-  food: Palette.vintageBerry,
-  market: Palette.teal,
-  museum: Palette.sunflowerGold,
-  music: Palette.frostedBlue,
-  other: Palette.teal,
-  popup: Palette.raspberryRed,
+type StoryCategory = {
+  accent: string;
+  events: OffmapEvent[];
+  label: string;
+  mark: string;
 };
 
+type EventSection = {
+  accent: string;
+  events: OffmapEvent[];
+  title: string;
+};
+
+const storyCategories: StoryCategory[] = [
+  { label: 'For You', mark: '*', accent: Palette.sunflowerGold, events: mockEvents.slice(0, 4) },
+  { label: 'Food', mark: 'Fd', accent: Palette.saddleBrown, events: eventsByCategory('food') },
+  { label: 'Art', mark: 'Ar', accent: Palette.coolSteel, events: eventsByCategory('art') },
+  { label: 'Music', mark: 'Mu', accent: Palette.forestMoss, events: eventsByCategory('music') },
+  { label: 'Pop-up', mark: 'Pop', accent: Palette.sunflowerGold, events: eventsByCategory('popup') },
+  { label: 'Market', mark: 'Mk', accent: Palette.saddleBrown, events: eventsByCategory('market') },
+];
+
+const eventSections: EventSection[] = [
+  { title: 'Free Today', accent: Palette.sunflowerGold, events: mockEvents.filter((event) => event.price === 'Free') },
+  { title: 'Music', accent: Palette.forestMoss, events: eventsByCategory('music') },
+  { title: 'Crafts', accent: Palette.coolSteel, events: [...eventsByCategory('art'), ...eventsByCategory('market')] },
+  { title: 'Food & Markets', accent: Palette.saddleBrown, events: [...eventsByCategory('food'), ...eventsByCategory('market')] },
+];
+
+const mixedFeed = [
+  { event: mockEvents[1], type: 'image' as const },
+  { event: mockEvents[6], type: 'text' as const },
+  { event: mockEvents[4], type: 'text' as const },
+  { event: mockEvents[0], type: 'image' as const },
+];
+
 export default function FeaturedScreen() {
+  const [activeStory, setActiveStory] = useState<StoryCategory | null>(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+
+  const openStory = (category: StoryCategory) => {
+    setActiveStory(category);
+    setStoryIndex(0);
+  };
+
+  const closeStory = () => {
+    setActiveStory(null);
+    setStoryIndex(0);
+  };
+
+  const showNextStory = () => {
+    if (!activeStory) {
+      return;
+    }
+    const events = activeStory.events.length > 0 ? activeStory.events : mockEvents.slice(0, 3);
+    if (storyIndex >= events.length - 1) {
+      closeStory();
+      return;
+    }
+    setStoryIndex((index) => index + 1);
+  };
+
+  const showPreviousStory = () => {
+    setStoryIndex((index) => Math.max(index - 1, 0));
+  };
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <SafeAreaView edges={['top']} style={styles.header}>
           <View style={styles.headerCopy}>
-            <ThemedText style={styles.kicker}>OFFMAP</ThemedText>
-            <ThemedText style={styles.title}>Community Board</ThemedText>
-            <ThemedText style={styles.subtitle}>Flyers, tips, and tiny city rumors.</ThemedText>
+            <ThemedText style={styles.logo}>
+              OFFMAP<ThemedText style={styles.logoDot}>.</ThemedText>
+            </ThemedText>
+            <ThemedText style={styles.location}>in New York City</ThemedText>
           </View>
-          <Pressable style={styles.sparkButton}>
-            <SymbolView name={{ ios: 'plus', web: 'add' }} size={17} tintColor={Palette.paper} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <IconButton name={{ ios: 'bell', web: 'notifications' }} />
+            <Link href="/suggest" asChild>
+              <Pressable
+                accessibilityLabel="Suggest an event"
+                accessibilityRole="link"
+                style={StyleSheet.flatten([styles.iconButton, styles.iconButtonFilled])}>
+                <MapMarkerPlusIcon />
+              </Pressable>
+            </Link>
+          </View>
         </SafeAreaView>
 
-        <View style={styles.featuredSection}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>New on the Board</ThemedText>
-            <ThemedText style={styles.viewAll}>Pin one {'->'}</ThemedText>
-          </View>
-          <ScrollView
-            contentContainerStyle={styles.featuredRail}
-            horizontal
-            showsHorizontalScrollIndicator={false}>
-            {featuredEvents.map((event, index) => (
-              <FeaturedCard event={event} index={index} key={event.id} />
-            ))}
-          </ScrollView>
+        <ScrollView
+          contentContainerStyle={styles.storyRail}
+          horizontal
+          showsHorizontalScrollIndicator={false}>
+          {storyCategories.map((category) => (
+            <StoryBubble category={category} key={category.label} onPress={() => openStory(category)} />
+          ))}
+        </ScrollView>
+
+        <View style={styles.searchBar}>
+          <SymbolView
+            name={{ ios: 'magnifyingglass', web: 'search' }}
+            size={18}
+            tintColor="#75695F"
+          />
+          <TextInput
+            placeholder="Search events, places, vibes..."
+            placeholderTextColor="#75695F"
+            style={styles.searchInput}
+          />
         </View>
 
-        <View style={styles.todaySection}>
+        {eventSections.map((section) => (
+          <EventShelf key={section.title} section={section} />
+        ))}
+
+        <View style={styles.feedSection}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <View style={styles.todayDot}>
-                <ThemedText style={styles.todayDotText}>!</ThemedText>
-              </View>
-              <ThemedText style={styles.sectionTitle}>Today’s Notes</ThemedText>
-            </View>
+            <ThemedText style={styles.sectionTitle}>Latest Suggestions</ThemedText>
+            <ThemedText style={styles.seeAll}>Open feed</ThemedText>
           </View>
-
-          <View style={styles.todayStack}>
-            {todayEvents.map((event, index) => (
-              <TodayCard event={event} index={index} key={event.id} />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.recommendedSection}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Around Town</ThemedText>
-            <Pressable style={styles.filterButton}>
-              <FilterGlyph />
-            </Pressable>
-          </View>
-
-          <View style={styles.recommendationGrid}>
-            {recommendedEvents.map((event, index) => (
-              <RecommendedCard event={event} index={index} key={event.id} />
+          <View style={styles.feedStack}>
+            {mixedFeed.map((item) => (
+              <FeedPost event={item.event} key={`${item.type}-${item.event.id}`} type={item.type} />
             ))}
           </View>
         </View>
       </ScrollView>
+
+      <StoryViewer
+        category={activeStory}
+        index={storyIndex}
+        onClose={closeStory}
+        onNext={showNextStory}
+        onPrevious={showPreviousStory}
+      />
     </ThemedView>
   );
 }
 
-function FeaturedCard({ event, index }: { event: OffmapEvent; index: number }) {
-  const accent = index % 2 === 0 ? Palette.sunflowerGold : Palette.frostedBlue;
-  const cardStyle = StyleSheet.flatten([
-    styles.featuredCard,
-    index % 2 === 1 && styles.featuredCardAlt,
-  ]);
-  const sharedBy = event.sharedBy ?? 'A neighbor';
-
+function IconButton({
+  name,
+}: {
+  name: { ios: 'bell'; web: 'notifications' };
+}) {
   return (
-    <Link href={`/event/${event.id}`} asChild>
-      <Pressable style={cardStyle}>
-        <View style={[styles.paperPin, { backgroundColor: accent }]} />
-        <View style={[styles.bannerRow, { backgroundColor: accent }]} />
-        <View style={styles.featuredCardCopy}>
-          <View style={styles.sharedByRow}>
-            <View style={styles.avatar}>
-              <ThemedText style={styles.avatarText}>{sharedBy.slice(0, 1)}</ThemedText>
-            </View>
-            <View style={styles.sharedByCopy}>
-              <ThemedText style={styles.sharedByText}>Shared by {sharedBy}</ThemedText>
-              <ThemedText style={styles.handleText}>{event.sharedByHandle}</ThemedText>
-            </View>
-          </View>
-          <ThemedText numberOfLines={2} style={styles.featuredTitle}>
-            {event.title}
-          </ThemedText>
-          <ThemedText numberOfLines={1} style={styles.featuredMeta}>
-            {formatEventTime(event.startTime)} - {event.venueName}
-          </ThemedText>
-        </View>
-      </Pressable>
-    </Link>
+    <Pressable style={styles.iconButton}>
+      <SymbolView name={name} size={18} tintColor={Palette.ink} />
+    </Pressable>
   );
 }
 
-function TodayCard({ event, index }: { event: OffmapEvent; index: number }) {
-  const accent = index % 2 === 0 ? Palette.sunflowerGold : Palette.frostedBlue;
-
+function MapMarkerPlusIcon() {
   return (
-    <Link href={`/event/${event.id}`} asChild>
-      <Pressable style={styles.todayCard}>
-        <View style={[styles.todayIconBox, { backgroundColor: `${accent}2B` }]}>
-          <SymbolView
-            name={{ ios: index === 0 ? 'star' : 'map', web: index === 0 ? 'star' : 'map' }}
-            size={22}
-            tintColor={categoryColors[event.category]}
-          />
-        </View>
-        <View style={styles.todayCopy}>
-          <ThemedText numberOfLines={1} style={styles.todaySource}>
-            Shared by {event.sharedBy}
-          </ThemedText>
-          <ThemedText numberOfLines={2} style={styles.todayTitle}>
-            {event.title}
-          </ThemedText>
-          <ThemedText numberOfLines={1} style={styles.todayMeta}>
-            {formatEventTime(event.startTime)} - {event.venueName}
-          </ThemedText>
-        </View>
-        <View style={styles.statusPill}>
-          <ThemedText style={styles.statusText}>{index === 0 ? 'today' : 'now'}</ThemedText>
-        </View>
-        <SymbolView
-          name={{ ios: 'chevron.right', web: 'chevron_right' }}
-          size={15}
-          tintColor={Palette.vintageBerry}
-        />
-      </Pressable>
-    </Link>
-  );
-}
-
-function RecommendedCard({ event, index }: { event: OffmapEvent; index: number }) {
-  const accent = categoryColors[event.category];
-
-  return (
-    <Link href={`/event/${event.id}`} asChild>
-      <Pressable style={styles.recommendationCard}>
-        <View style={[styles.thumbnail, getThumbnailStyle(index)]}>
-          <ThumbnailArt index={index} accent={accent} />
-          <View style={styles.bookmark}>
-            <SymbolView name={{ ios: 'bookmark', web: 'bookmark' }} size={13} tintColor={Palette.vintageBerry} />
-          </View>
-        </View>
-        <ThemedText style={[styles.category, { color: accent }]}>
-          Shared by {event.sharedBy}
-        </ThemedText>
-        <ThemedText numberOfLines={2} style={styles.cardTitle}>
-          {event.title}
-        </ThemedText>
-        <ThemedText numberOfLines={1} style={styles.cardFooter}>
-          {formatEventTime(event.startTime)} - {event.venueName}
-        </ThemedText>
-      </Pressable>
-    </Link>
-  );
-}
-
-function ThumbnailArt({ accent, index }: { accent: string; index: number }) {
-  if (index === 0) {
-    return (
-      <>
-        <View style={[styles.wallCircle, { backgroundColor: `${Palette.teal}33` }]} />
-        <View style={styles.floorLine} />
-        <View style={[styles.yogaMat, { backgroundColor: accent }]} />
-        <View style={styles.plantStem} />
-        <View style={styles.plantLeafOne} />
-        <View style={styles.plantLeafTwo} />
-      </>
-    );
-  }
-
-  if (index === 1) {
-    return (
-      <>
-        {Array.from({ length: 8 }).map((_, itemIndex) => (
-          <View
-            key={itemIndex}
-            style={[
-              styles.marketObject,
-              {
-                backgroundColor: itemIndex % 3 === 0 ? Palette.paper : Palette.sunflowerGold,
-                left: 18 + (itemIndex % 4) * 30,
-                top: 20 + Math.floor(itemIndex / 4) * 36,
-              },
-            ]}
-          />
-        ))}
-        <View style={styles.marketTable} />
-      </>
-    );
-  }
-
-  if (index === 2) {
-    return (
-      <>
-        <View style={styles.canvasFrame} />
-        <View style={[styles.paintStroke, { backgroundColor: Palette.raspberryRed }]} />
-        <View style={[styles.paintStrokeAlt, { backgroundColor: Palette.frostedBlue }]} />
-        <View style={styles.galleryPlantOne} />
-        <View style={styles.galleryPlantTwo} />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <View style={styles.table} />
-      {Array.from({ length: 5 }).map((_, itemIndex) => (
-        <View
-          key={itemIndex}
-          style={[
-            styles.supperLight,
-            {
-              backgroundColor: itemIndex % 2 === 0 ? Palette.sunflowerGold : Palette.paper,
-              left: 18 + itemIndex * 24,
-            },
-          ]}
-        />
-      ))}
-      <View style={[styles.supperPlate, { left: 24 }]} />
-      <View style={[styles.supperPlate, { right: 26 }]} />
-      <View style={[styles.supperPlateSmall, { backgroundColor: accent }]} />
-    </>
-  );
-}
-
-function FilterGlyph() {
-  return (
-    <View style={styles.filterGlyph}>
-      <View style={[styles.filterGlyphLine, { width: 14 }]} />
-      <View style={[styles.filterGlyphLine, { width: 9 }]} />
-      <View style={[styles.filterGlyphLine, { width: 12 }]} />
+    <View style={styles.markerIcon}>
+      <View style={styles.markerPin}>
+        <View style={styles.markerPinHole} />
+      </View>
+      <View style={styles.markerPlusVertical} />
+      <View style={styles.markerPlusHorizontal} />
     </View>
   );
 }
 
-function formatEventTime(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
+function StoryBubble({
+  category,
+  onPress,
+}: {
+  category: StoryCategory;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.storyItem}>
+      <View style={[styles.storyRing, { borderColor: category.accent }]}>
+        <View style={styles.storyInner}>
+          <ThemedText style={styles.storyMark}>{category.mark}</ThemedText>
+        </View>
+      </View>
+      <ThemedText numberOfLines={1} style={styles.storyLabel}>
+        {category.label}
+      </ThemedText>
+    </Pressable>
+  );
 }
 
-function getThumbnailStyle(index: number) {
-  if (index === 0) {
-    return styles.thumbnailStudio;
+function StoryViewer({
+  category,
+  index,
+  onClose,
+  onNext,
+  onPrevious,
+}: {
+  category: StoryCategory | null;
+  index: number;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+}) {
+  const events = category ? (category.events.length > 0 ? category.events : mockEvents.slice(0, 3)) : [];
+  const event = events[index];
+
+  return (
+    <Modal animationType="fade" transparent visible={Boolean(category && event)} onRequestClose={onClose}>
+      {category && event ? (
+        <View style={styles.storyOverlay}>
+          <SafeAreaView style={styles.storyViewer}>
+            <View style={styles.storyProgressRow}>
+              {events.map((item, itemIndex) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.storyProgressTrack,
+                    itemIndex <= index && styles.storyProgressTrackActive,
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.storyViewerHeader}>
+              <View style={[styles.storyMiniRing, { borderColor: category.accent }]}>
+                <ThemedText style={styles.storyMiniMark}>{category.mark}</ThemedText>
+              </View>
+              <View style={styles.storyHeaderCopy}>
+                <ThemedText style={styles.storyViewerLabel}>{category.label}</ThemedText>
+                <ThemedText style={styles.storyViewerMeta}>{event.venueName}</ThemedText>
+              </View>
+              <Pressable onPress={onClose} style={styles.storyCloseButton}>
+                <SymbolView name={{ ios: 'xmark', web: 'close' }} size={18} tintColor={Palette.paper} />
+              </Pressable>
+            </View>
+
+            <View style={styles.storyPoster}>
+              <PosterArt accent={category.accent} category={event.category} />
+              <View style={styles.storyPosterScrim} />
+              <View style={styles.storyPosterCopy}>
+                <ThemedText style={styles.storyPosterTag}>{event.price ?? 'Details soon'}</ThemedText>
+                <ThemedText style={styles.storyPosterTitle}>{event.title}</ThemedText>
+                <ThemedText numberOfLines={2} style={styles.storyPosterBody}>
+                  {event.description}
+                </ThemedText>
+                <Link href={`/event/${event.id}`} asChild>
+                  <Pressable style={styles.storyDetailsButton}>
+                    <ThemedText style={styles.storyDetailsButtonText}>View details</ThemedText>
+                  </Pressable>
+                </Link>
+              </View>
+            </View>
+
+            <View style={styles.storyTapLayer}>
+              <Pressable onPress={onPrevious} style={styles.storyTapZone} />
+              <Pressable onPress={onNext} style={styles.storyTapZone} />
+            </View>
+          </SafeAreaView>
+        </View>
+      ) : null}
+    </Modal>
+  );
+}
+
+function EventShelf({ section }: { section: EventSection }) {
+  const events = section.events.length > 0 ? section.events : mockEvents.slice(0, 3);
+
+  return (
+    <View style={styles.shelf}>
+      <View style={styles.sectionHeader}>
+        <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+        <ThemedText style={styles.seeAll}>See all</ThemedText>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.eventRail}
+        horizontal
+        showsHorizontalScrollIndicator={false}>
+        {events.map((event) => (
+          <EventTile accent={section.accent} event={event} key={event.id} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function EventTile({
+  accent,
+  event,
+}: {
+  accent: string;
+  event: OffmapEvent;
+}) {
+  return (
+    <Link href={`/event/${event.id}`} asChild>
+      <Pressable style={styles.eventTile}>
+        <PosterArt accent={accent} category={event.category} />
+        <View style={styles.eventBadge}>
+          <ThemedText style={styles.eventBadgeText}>{event.price === 'Free' ? 'FREE' : 'POST'}</ThemedText>
+        </View>
+        <View style={styles.heartButton}>
+          <SymbolView name={{ ios: 'heart', web: 'favorite_border' }} size={15} tintColor={Palette.paper} />
+        </View>
+        <View style={styles.tileScrim} />
+        <ThemedText numberOfLines={1} style={styles.tileTitle}>
+          {event.title}
+        </ThemedText>
+        <View style={styles.tileMeta}>
+          <ThemedText numberOfLines={1} style={styles.tileVenue}>
+            {event.venueName}
+          </ThemedText>
+          <ThemedText numberOfLines={1} style={styles.tilePrice}>
+            {event.price ?? 'Details soon'}
+          </ThemedText>
+        </View>
+      </Pressable>
+    </Link>
+  );
+}
+
+function FeedPost({ event, type }: { event: OffmapEvent; type: 'image' | 'text' }) {
+  return (
+    <Link href={`/event/${event.id}`} asChild>
+      <Pressable style={styles.feedPost}>
+        <View style={styles.feedPostHeader}>
+          <View style={styles.feedAvatar}>
+            <ThemedText style={styles.feedAvatarText}>{(event.sharedBy ?? 'O').slice(0, 1)}</ThemedText>
+          </View>
+          <View style={styles.feedAuthor}>
+            <ThemedText style={styles.feedAuthorName}>Shared by {event.sharedBy ?? 'a neighbor'}</ThemedText>
+            <ThemedText style={styles.feedHandle}>{event.sharedByHandle ?? '@offmap'}</ThemedText>
+          </View>
+        </View>
+        {type === 'image' ? (
+          <View style={styles.feedPoster}>
+            <PosterArt accent={Palette.sunflowerGold} category={event.category} />
+            <View style={styles.feedPosterScrim} />
+            <ThemedText numberOfLines={2} style={styles.feedPosterTitle}>
+              {event.title}
+            </ThemedText>
+          </View>
+        ) : (
+          <View style={styles.textPost}>
+            <ThemedText style={styles.textPostLabel}>TEXT POST</ThemedText>
+            <ThemedText style={styles.textPostTitle}>{event.title}</ThemedText>
+            <ThemedText numberOfLines={3} style={styles.textPostBody}>
+              {event.communityNote}
+            </ThemedText>
+          </View>
+        )}
+      </Pressable>
+    </Link>
+  );
+}
+
+function PosterArt({ accent, category }: { accent: string; category: EventCategory }) {
+  return (
+    <View style={[styles.posterArt, { backgroundColor: accent }]}>
+      <View style={styles.posterCircle} />
+      <View style={styles.posterStripeOne} />
+      <View style={styles.posterStripeTwo} />
+      <View style={[styles.posterBlock, getPosterBlockStyle(category)]} />
+    </View>
+  );
+}
+
+function eventsByCategory(category: EventCategory) {
+  return mockEvents.filter((event) => event.category === category);
+}
+
+function getPosterBlockStyle(category: EventCategory) {
+  if (category === 'music') {
+    return styles.posterBlockMusic;
   }
-  if (index === 1) {
-    return styles.thumbnailMarket;
+  if (category === 'food' || category === 'market') {
+    return styles.posterBlockFood;
   }
-  if (index === 2) {
-    return styles.thumbnailWorkshop;
+  if (category === 'art') {
+    return styles.posterBlockArt;
   }
-  return styles.thumbnailSupper;
+  return styles.posterBlockDefault;
 }
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: Palette.cream,
     flex: 1,
   },
   content: {
-    alignSelf: 'center',
-    maxWidth: 430,
-    paddingBottom: 128,
-    paddingTop: Platform.select({ web: 74, default: 0 }),
-    width: '100%',
+    gap: 18,
+    paddingBottom: 112,
   },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingBottom: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 4,
   },
   headerCopy: {
-    gap: 2,
+    gap: 0,
   },
-  kicker: {
-    color: Palette.teal,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  title: {
+  logo: {
     color: Palette.ink,
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
     lineHeight: 32,
   },
-  subtitle: {
-    color: '#8A5D50',
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
+  logoDot: {
+    color: Palette.sunflowerGold,
   },
-  sparkButton: {
+  location: {
+    color: '#75695F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  iconButton: {
     alignItems: 'center',
-    backgroundColor: Palette.raspberryRed,
-    borderRadius: 19,
-    height: 38,
+    backgroundColor: '#ECE4DA',
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    shadowColor: Palette.raspberryRed,
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    width: 38,
+    width: 40,
   },
-  featuredSection: {
-    backgroundColor: Palette.cream,
-    paddingBottom: 18,
+  iconButtonFilled: {
+    backgroundColor: Palette.forestMoss,
   },
-  todaySection: {
-    backgroundColor: Palette.blush,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    gap: 12,
-    paddingBottom: 28,
-    paddingHorizontal: 20,
-    paddingTop: 24,
+  markerIcon: {
+    height: 23,
+    position: 'relative',
+    width: 24,
   },
-  recommendedSection: {
-    backgroundColor: Palette.cream,
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 26,
+  markerPin: {
+    alignItems: 'center',
+    borderColor: Palette.paper,
+    borderRadius: 9,
+    borderWidth: 2,
+    height: 18,
+    justifyContent: 'center',
+    left: 1,
+    position: 'absolute',
+    top: 0,
+    transform: [{ rotate: '45deg' }],
+    width: 18,
+  },
+  markerPinHole: {
+    backgroundColor: Palette.paper,
+    borderRadius: 3,
+    height: 5,
+    width: 5,
+  },
+  markerPlusHorizontal: {
+    backgroundColor: Palette.paper,
+    borderRadius: 1,
+    height: 3,
+    position: 'absolute',
+    right: 0,
+    top: 7,
+    width: 10,
+  },
+  markerPlusVertical: {
+    backgroundColor: Palette.paper,
+    borderRadius: 1,
+    height: 10,
+    position: 'absolute',
+    right: 3.5,
+    top: 3.5,
+    width: 3,
+  },
+  storyRail: {
+    gap: 14,
+    paddingHorizontal: 16,
+  },
+  storyItem: {
+    alignItems: 'center',
+    gap: 6,
+    width: 62,
+  },
+  storyRing: {
+    alignItems: 'center',
+    borderRadius: 31,
+    borderWidth: 2.5,
+    height: 62,
+    justifyContent: 'center',
+    width: 62,
+  },
+  storyInner: {
+    alignItems: 'center',
+    backgroundColor: Palette.paper,
+    borderRadius: 25,
+    height: 50,
+    justifyContent: 'center',
+    width: 50,
+  },
+  storyMark: {
+    color: Palette.ink,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  storyLabel: {
+    color: Palette.ink,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  searchBar: {
+    alignItems: 'center',
+    backgroundColor: '#ECE4DA',
+    borderRadius: 14,
+    flexDirection: 'row',
+    gap: 9,
+    height: 44,
+    marginHorizontal: 16,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    color: Palette.ink,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  shelf: {
+    gap: 9,
   },
   sectionHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  sectionTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 9,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     color: Palette.ink,
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '700',
-    lineHeight: 28,
+    lineHeight: 23,
   },
-  viewAll: {
-    color: Palette.teal,
+  seeAll: {
+    color: Palette.saddleBrown,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  featuredRail: {
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 8,
+  eventRail: {
+    gap: 10,
+    paddingHorizontal: 16,
   },
-  featuredCard: {
-    backgroundColor: Palette.paper,
-    borderColor: '#FFD0B8',
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 164,
-    justifyContent: 'flex-end',
+  eventTile: {
+    borderRadius: 10,
+    height: 156,
     overflow: 'hidden',
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    width: 284,
+    width: 148,
   },
-  featuredCardAlt: {
-    backgroundColor: '#F8FEFE',
-  },
-  paperPin: {
-    borderRadius: 14,
-    height: 28,
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    width: 28,
-  },
-  bannerRow: {
-    height: 8,
+  posterArt: {
+    bottom: 0,
     left: 0,
-    opacity: 0.72,
+    overflow: 'hidden',
     position: 'absolute',
     right: 0,
     top: 0,
   },
-  featuredCardCopy: {
-    gap: 9,
+  posterCircle: {
+    backgroundColor: 'rgba(255, 253, 248, 0.28)',
+    borderRadius: 58,
+    height: 116,
+    position: 'absolute',
+    right: -30,
+    top: 18,
+    width: 116,
   },
-  sharedByRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
+  posterStripeOne: {
+    backgroundColor: 'rgba(136, 82, 43, 0.5)',
+    height: 22,
+    left: -16,
+    position: 'absolute',
+    right: -16,
+    top: 48,
+    transform: [{ rotate: '-12deg' }],
   },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: Palette.blush,
-    borderRadius: 17,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
+  posterStripeTwo: {
+    backgroundColor: 'rgba(255, 253, 248, 0.32)',
+    height: 15,
+    left: -24,
+    position: 'absolute',
+    right: -24,
+    top: 86,
+    transform: [{ rotate: '13deg' }],
   },
-  avatarText: {
-    color: Palette.ink,
-    fontSize: 14,
-    fontWeight: '700',
+  posterBlock: {
+    borderColor: Palette.paper,
+    borderWidth: 2.5,
+    position: 'absolute',
   },
-  sharedByCopy: {
-    flex: 1,
-    gap: 1,
-  },
-  sharedByText: {
-    color: Palette.ink,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 17,
-  },
-  handleText: {
-    color: Palette.vintageBerry,
-    fontSize: 11,
-    fontWeight: '500',
-    lineHeight: 15,
-  },
-  featuredTitle: {
-    color: Palette.ink,
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  featuredMeta: {
-    color: Palette.raspberryRed,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  todayDot: {
-    alignItems: 'center',
-    backgroundColor: Palette.raspberryRed,
-    borderRadius: 9,
-    height: 18,
-    justifyContent: 'center',
-    width: 18,
-  },
-  todayDotText: {
-    color: Palette.paper,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  todayStack: {
-    gap: 12,
-  },
-  todayCard: {
-    alignItems: 'center',
-    backgroundColor: Palette.paper,
-    borderColor: '#FFD0B8',
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 76,
-    padding: 12,
-    shadowColor: '#8C3A25',
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-  },
-  todayIconBox: {
-    alignItems: 'center',
-    borderRadius: 14,
+  posterBlockDefault: {
+    borderRadius: 24,
+    bottom: 42,
     height: 50,
-    justifyContent: 'center',
+    left: 25,
     width: 50,
   },
-  todayCopy: {
-    flex: 1,
-    gap: 2,
+  posterBlockMusic: {
+    borderRadius: 5,
+    bottom: 44,
+    height: 56,
+    left: 35,
+    transform: [{ rotate: '-8deg' }],
+    width: 36,
   },
-  todaySource: {
-    color: Palette.raspberryRed,
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 14,
+  posterBlockFood: {
+    borderRadius: 42,
+    bottom: 42,
+    height: 58,
+    left: 25,
+    width: 58,
   },
-  todayTitle: {
-    color: Palette.ink,
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 18,
+  posterBlockArt: {
+    borderRadius: 8,
+    bottom: 44,
+    height: 48,
+    left: 28,
+    transform: [{ rotate: '12deg' }],
+    width: 68,
   },
-  todayMeta: {
-    color: Palette.vintageBerry,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statusPill: {
-    backgroundColor: Palette.blush,
+  eventBadge: {
+    backgroundColor: Palette.saddleBrown,
     borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    position: 'absolute',
+    top: 8,
   },
-  statusText: {
-    color: Palette.raspberryRed,
+  eventBadgeText: {
+    color: Palette.paper,
     fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 12,
+    fontWeight: '800',
   },
-  filterButton: {
+  heartButton: {
     alignItems: 'center',
-    backgroundColor: Palette.paper,
-    borderColor: '#FFD0B8',
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  filterGlyph: {
-    alignItems: 'center',
-    gap: 3,
-  },
-  filterGlyphLine: {
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: Palette.vintageBerry,
-  },
-  recommendationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 20,
-  },
-  recommendationCard: {
-    gap: 5,
-    width: '47.5%',
-  },
-  thumbnail: {
-    aspectRatio: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  thumbnailStudio: {
-    backgroundColor: Palette.blush,
-  },
-  thumbnailMarket: {
-    backgroundColor: Palette.sunflowerGold,
-  },
-  thumbnailWorkshop: {
-    backgroundColor: '#FFF0E6',
-  },
-  thumbnailSupper: {
-    backgroundColor: Palette.raspberryRed,
-  },
-  bookmark: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.86)',
-    borderRadius: 12,
-    height: 24,
+    backgroundColor: 'rgba(45, 33, 24, 0.26)',
+    borderRadius: 13,
+    height: 26,
     justifyContent: 'center',
     position: 'absolute',
     right: 8,
     top: 8,
-    width: 24,
+    width: 26,
   },
-  category: {
-    fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 12,
-  },
-  cardTitle: {
-    color: Palette.ink,
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 17,
-  },
-  cardMeta: {
-    color: Palette.vintageBerry,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  cardFooter: {
-    color: Palette.raspberryRed,
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 14,
-  },
-  wallCircle: {
-    borderRadius: 50,
-    height: 100,
-    left: 38,
+  tileScrim: {
+    backgroundColor: 'rgba(45, 33, 24, 0.38)',
+    bottom: 0,
+    height: 76,
+    left: 0,
     position: 'absolute',
-    top: 18,
-    width: 100,
+    right: 0,
   },
-  floorLine: {
-    backgroundColor: '#B98A55',
-    height: 2,
+  tileTitle: {
+    bottom: 39,
+    color: Palette.paper,
+    fontSize: 14,
+    fontWeight: '800',
+    left: 10,
+    lineHeight: 16,
+    position: 'absolute',
+    right: 10,
+  },
+  tileMeta: {
+    bottom: 11,
+    gap: 0,
     left: 10,
     position: 'absolute',
     right: 10,
-    top: '64%',
   },
-  yogaMat: {
-    borderRadius: 999,
-    bottom: 36,
-    height: 7,
-    left: 28,
-    position: 'absolute',
-    right: 28,
+  tileVenue: {
+    color: Palette.paper,
+    fontSize: 11,
+    fontWeight: '600',
   },
-  plantStem: {
-    backgroundColor: Palette.ink,
-    bottom: 42,
-    height: 36,
-    left: 27,
-    position: 'absolute',
-    transform: [{ rotate: '-12deg' }],
-    width: 2,
+  tilePrice: {
+    color: Palette.sunflowerGold,
+    fontSize: 11,
+    fontWeight: '800',
   },
-  plantLeafOne: {
-    backgroundColor: Palette.teal,
-    borderRadius: 9,
-    bottom: 60,
-    height: 20,
-    left: 16,
-    position: 'absolute',
-    transform: [{ rotate: '-35deg' }],
-    width: 10,
+  feedSection: {
+    gap: 9,
   },
-  plantLeafTwo: {
-    backgroundColor: Palette.teal,
-    borderRadius: 9,
-    bottom: 52,
-    height: 20,
-    left: 31,
-    position: 'absolute',
-    transform: [{ rotate: '35deg' }],
-    width: 10,
+  feedStack: {
+    gap: 10,
+    paddingHorizontal: 16,
   },
-  marketObject: {
-    borderRadius: 20,
-    height: 22,
-    position: 'absolute',
-    width: 22,
-  },
-  marketTable: {
-    backgroundColor: '#F3D5A4',
-    bottom: 26,
-    height: 42,
-    left: 12,
-    position: 'absolute',
-    right: 12,
-  },
-  canvasFrame: {
+  feedPost: {
     backgroundColor: Palette.paper,
-    borderColor: '#FFD99D',
-    borderWidth: 3,
-    height: 78,
-    left: 26,
-    position: 'absolute',
-    top: 22,
-    width: 92,
-  },
-  paintStroke: {
-    borderRadius: 999,
-    height: 16,
-    left: 50,
-    position: 'absolute',
-    top: 54,
-    transform: [{ rotate: '-22deg' }],
-    width: 58,
-  },
-  paintStrokeAlt: {
-    borderRadius: 999,
-    height: 12,
-    left: 42,
-    position: 'absolute',
-    top: 64,
-    transform: [{ rotate: '-22deg' }],
-    width: 50,
-  },
-  galleryPlantOne: {
-    backgroundColor: Palette.teal,
-    borderRadius: 12,
-    bottom: 18,
-    height: 34,
-    left: 16,
-    position: 'absolute',
-    width: 12,
-  },
-  galleryPlantTwo: {
-    backgroundColor: Palette.teal,
-    borderRadius: 12,
-    bottom: 18,
-    height: 42,
-    position: 'absolute',
-    right: 18,
-    width: 12,
-  },
-  table: {
-    backgroundColor: '#6D3A2A',
-    borderRadius: 18,
-    bottom: 20,
-    height: 60,
-    left: 16,
-    position: 'absolute',
-    right: 16,
-  },
-  supperLight: {
+    borderColor: Palette.bone,
     borderRadius: 10,
-    height: 20,
-    position: 'absolute',
-    top: 18,
-    width: 20,
+    borderWidth: 1,
+    gap: 10,
+    overflow: 'hidden',
+    padding: 10,
   },
-  supperPlate: {
-    backgroundColor: Palette.paper,
-    borderRadius: 18,
-    bottom: 38,
-    height: 36,
+  feedPostHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 9,
+  },
+  feedAvatar: {
+    alignItems: 'center',
+    backgroundColor: Palette.forestMoss,
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  feedAvatarText: {
+    color: Palette.paper,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  feedAuthor: {
+    flex: 1,
+  },
+  feedAuthorName: {
+    color: Palette.ink,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  feedHandle: {
+    color: '#75695F',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  feedPoster: {
+    borderRadius: 8,
+    height: 164,
+    overflow: 'hidden',
+  },
+  feedPosterScrim: {
+    backgroundColor: 'rgba(45, 33, 24, 0.32)',
+    bottom: 0,
+    height: 76,
+    left: 0,
     position: 'absolute',
+    right: 0,
+  },
+  feedPosterTitle: {
+    bottom: 14,
+    color: Palette.paper,
+    fontSize: 20,
+    fontWeight: '800',
+    left: 14,
+    lineHeight: 23,
+    position: 'absolute',
+    right: 14,
+  },
+  textPost: {
+    backgroundColor: Palette.saddleBrown,
+    borderRadius: 8,
+    gap: 7,
+    padding: 14,
+  },
+  textPostLabel: {
+    color: Palette.sunflowerGold,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  textPostTitle: {
+    color: Palette.paper,
+    fontSize: 19,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  textPostBody: {
+    color: '#F7E8D7',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  storyOverlay: {
+    backgroundColor: 'rgba(15, 12, 9, 0.94)',
+    flex: 1,
+  },
+  storyViewer: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  storyProgressRow: {
+    flexDirection: 'row',
+    gap: 5,
+    marginBottom: 10,
+  },
+  storyProgressTrack: {
+    backgroundColor: 'rgba(255, 253, 248, 0.3)',
+    borderRadius: 999,
+    flex: 1,
+    height: 3,
+  },
+  storyProgressTrackActive: {
+    backgroundColor: Palette.paper,
+  },
+  storyViewerHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  storyMiniRing: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 2,
+    height: 36,
+    justifyContent: 'center',
     width: 36,
   },
-  supperPlateSmall: {
+  storyMiniMark: {
+    color: Palette.paper,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  storyHeaderCopy: {
+    flex: 1,
+  },
+  storyViewerLabel: {
+    color: Palette.paper,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  storyViewerMeta: {
+    color: Palette.bone,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  storyCloseButton: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  storyPoster: {
     borderRadius: 12,
-    bottom: 48,
-    height: 24,
-    left: '43%',
+    flex: 1,
+    overflow: 'hidden',
+  },
+  storyPosterScrim: {
+    backgroundColor: 'rgba(45, 33, 24, 0.44)',
+    bottom: 0,
+    height: 230,
+    left: 0,
     position: 'absolute',
-    width: 24,
+    right: 0,
+  },
+  storyPosterCopy: {
+    bottom: 24,
+    gap: 10,
+    left: 20,
+    position: 'absolute',
+    right: 20,
+  },
+  storyPosterTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: Palette.sunflowerGold,
+    borderRadius: 999,
+    color: Palette.ink,
+    fontSize: 12,
+    fontWeight: '800',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  storyPosterTitle: {
+    color: Palette.paper,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 36,
+  },
+  storyPosterBody: {
+    color: '#F7E8D7',
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 21,
+  },
+  storyDetailsButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Palette.paper,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  storyDetailsButtonText: {
+    color: Palette.ink,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  storyTapLayer: {
+    bottom: 0,
+    flexDirection: 'row',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 96,
+  },
+  storyTapZone: {
+    flex: 1,
   },
 });

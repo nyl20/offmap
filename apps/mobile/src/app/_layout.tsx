@@ -15,6 +15,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="event/[id]" options={{ title: 'Event' }} />
           <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+          <Stack.Screen name="suggest" options={{ title: 'Suggest an event' }} />
         </Stack>
       </ThemeProvider>
     </QueryClientProvider>
