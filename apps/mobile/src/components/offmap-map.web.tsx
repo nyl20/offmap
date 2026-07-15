@@ -13,11 +13,11 @@ import type { EventCategory, OffmapEvent } from '@/types/event';
 const initialEvent = mockEvents[0];
 const categoryColorByName: Record<EventCategory, string> = {
   art: Palette.coolSteel,
-  food: Palette.saddleBrown,
-  market: Palette.forestMoss,
+  food: Palette.coral,
+  market: Palette.powderBlue,
   museum: Palette.coolSteel,
   music: Palette.posterOrange,
-  other: Palette.teal,
+  other: Palette.powderBlue,
   popup: Palette.sunflowerGold,
 };
 const quickFilters: { label: string; category?: EventCategory; freeOnly?: boolean }[] = [
@@ -48,7 +48,7 @@ export function OffmapMap() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search events, venues, neighborhoods"
-          placeholderTextColor="#64748B"
+          placeholderTextColor={Palette.powderBlue}
           style={styles.searchInput}
         />
         <View style={styles.filterRow}>
@@ -112,7 +112,7 @@ export function OffmapMap() {
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeaderRow}>
             <View style={styles.sheetTitleRow}>
-              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.posterOrange} />
+              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.sunflowerGold} />
               <ThemedText style={styles.sheetTitle}>Nearby events</ThemedText>
             </View>
             <SymbolView
@@ -121,7 +121,7 @@ export function OffmapMap() {
                 web: sheetExpanded ? 'expand_more' : 'expand_less',
               }}
               size={16}
-              tintColor={Palette.hotPink}
+              tintColor={Palette.sunflowerGold}
             />
           </View>
           {selectedEvent ? <EventSheetSummary event={selectedEvent} expanded={sheetExpanded} /> : null}
@@ -216,7 +216,7 @@ function EventSheetDetails({ event }: { event: OffmapEvent }) {
         <Link href={`/event/${event.id}`} asChild>
           <Pressable style={styles.secondaryAction}>
             <ThemedText style={styles.secondaryActionText}>More details</ThemedText>
-            <SymbolView name={{ ios: 'chevron.right', web: 'chevron_right' }} size={15} tintColor={Palette.ink} />
+            <SymbolView name={{ ios: 'chevron.right', web: 'chevron_right' }} size={15} tintColor={Palette.mintCream} />
           </Pressable>
         </Link>
       </View>
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     overflow: 'hidden',
-    backgroundColor: '#E8ECE5',
+    backgroundColor: Palette.deepNavy,
   },
   overlay: {
     position: 'absolute',
@@ -331,8 +331,8 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: Colors.light.background,
-    color: '#0F172A',
+    backgroundColor: Palette.glassStrong,
+    color: Palette.mintCream,
   },
   filterRow: {
     alignSelf: 'center',
@@ -346,10 +346,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Palette.glassStrong,
   },
   filterChipActive: {
-    backgroundColor: Palette.posterOrange,
+    backgroundColor: Palette.sunflowerGold,
   },
   mapPreview: {
     flex: 1,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: '130%',
     transform: [{ rotate: '24deg' }],
-    backgroundColor: '#C9D6C0',
+    backgroundColor: Palette.glassBlue,
   },
   gridLineHorizontal: {
     position: 'absolute',
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     width: '130%',
     height: 22,
     transform: [{ rotate: '-13deg' }],
-    backgroundColor: '#D5C4AF',
+    backgroundColor: Palette.glassStrong,
   },
   gridLineDiagonal: {
     position: 'absolute',
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     width: '130%',
     height: 16,
     transform: [{ rotate: '32deg' }],
-    backgroundColor: '#BFD0D6',
+    backgroundColor: Palette.glassBlue,
   },
   marker: {
     position: 'absolute',
@@ -389,8 +389,8 @@ const styles = StyleSheet.create({
     marginLeft: -14,
     marginTop: -14,
     borderRadius: 14,
-    backgroundColor: Palette.paper,
-    shadowColor: '#000000',
+    backgroundColor: Palette.mintCream,
+    shadowColor: Palette.inkWash,
     shadowOpacity: 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     gap: 5,
     padding: 14,
     borderRadius: 8,
-    backgroundColor: '#FFF0E6',
+    backgroundColor: Palette.glassStrong,
   },
   bottomSheet: {
     position: 'absolute',
@@ -427,8 +427,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    backgroundColor: 'rgba(255, 253, 248, 0.98)',
-    shadowColor: '#000000',
+    backgroundColor: 'rgba(11, 37, 69, 0.96)',
+    shadowColor: Palette.inkWash,
     shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: -6 },
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: Palette.posterOrange,
+    backgroundColor: Palette.sunflowerGold,
   },
   sheetHeaderRow: {
     alignItems: 'center',
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheetTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 20,
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   summaryTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 20,
     fontWeight: '800',
     lineHeight: 24,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   eventTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 22,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: Palette.ink,
+    backgroundColor: Palette.sunflowerGold,
   },
   factCopy: {
     flex: 1,
@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   factValue: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 19,
@@ -570,10 +570,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Palette.glassBlue,
   },
   tagText: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -581,15 +581,15 @@ const styles = StyleSheet.create({
     gap: 5,
     padding: 14,
     borderRadius: 8,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Palette.glassBlue,
   },
   communityTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 14,
     fontWeight: '800',
   },
   communityBody: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 20,
@@ -612,10 +612,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: Palette.ink,
+    backgroundColor: Palette.sunflowerGold,
   },
   primaryActionText: {
-    color: Palette.paper,
+    color: Palette.deepNavy,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -626,10 +626,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Palette.glassStrong,
   },
   secondaryActionText: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 14,
     fontWeight: '800',
   },

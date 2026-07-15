@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
+      "scheme": "offmap",
       "bundleIdentifier": "com.nyl20.OFFMAP"
     },
     "android": {
+      "scheme": "offmap",
       "adaptiveIcon": {
         "backgroundColor": "#1A05A2",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

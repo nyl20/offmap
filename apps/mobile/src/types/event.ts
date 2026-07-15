@@ -20,6 +20,7 @@ export type OffmapEvent = {
   longitude: number;
   imageUrl?: string;
   sourceUrl?: string;
+  sourceName?: string;
   price?: string;
   sharedBy?: string;
   sharedByHandle?: string;
@@ -27,5 +28,6 @@ export type OffmapEvent = {
   communityNote?: string;
   confirmations?: number;
   tags: string[];
+  categoryLabels?: string[];
   createdAt: string;
 };

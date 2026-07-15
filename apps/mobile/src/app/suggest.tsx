@@ -86,11 +86,11 @@ function Field({
           keyboardType={keyboardType}
           multiline={multiline}
           placeholder={placeholder}
-          placeholderTextColor="#75695F"
+          placeholderTextColor={Palette.powderBlue}
           style={[styles.input, multiline && styles.inputTall]}
         />
         {trailingIcon ? (
-          <SymbolView name={{ ios: 'photo', web: 'image' }} size={18} tintColor={Palette.saddleBrown} />
+          <SymbolView name={{ ios: 'photo', web: 'image' }} size={18} tintColor={Palette.sunflowerGold} />
         ) : null}
       </View>
     </View>
@@ -111,7 +111,7 @@ function MapMarkerPlusIcon() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Palette.cream,
+    backgroundColor: Palette.deepNavy,
     flex: 1,
   },
   content: {
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   heroIcon: {
     alignItems: 'center',
-    backgroundColor: Palette.forestMoss,
+    backgroundColor: Palette.sunflowerGold,
     borderRadius: 16,
     height: 54,
     justifyContent: 'center',
@@ -138,13 +138,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 28,
   },
   subtitle: {
-    color: '#75695F',
+    color: Palette.powderBlue,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 19,
@@ -157,13 +157,13 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   label: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 13,
     fontWeight: '700',
   },
   inputShell: {
     alignItems: 'center',
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.glassStrong,
     borderColor: Palette.bone,
     borderRadius: 10,
     borderWidth: 1,
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   input: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     paddingRight: 18,
   },
   categoryPill: {
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.glassStrong,
     borderColor: Palette.bone,
     borderRadius: 999,
     borderWidth: 1,
@@ -203,22 +203,22 @@ const styles = StyleSheet.create({
     borderColor: Palette.sunflowerGold,
   },
   categoryPillText: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 13,
     fontWeight: '700',
   },
   categoryPillTextActive: {
-    color: Palette.ink,
+    color: Palette.deepNavy,
   },
   submitButton: {
     alignItems: 'center',
-    backgroundColor: Palette.saddleBrown,
+    backgroundColor: Palette.sunflowerGold,
     borderRadius: 10,
     justifyContent: 'center',
     minHeight: 50,
   },
   submitButtonText: {
-    color: Palette.paper,
+    color: Palette.deepNavy,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   markerPin: {
     alignItems: 'center',
-    borderColor: Palette.paper,
+    borderColor: Palette.deepNavy,
     borderRadius: 10,
     borderWidth: 2,
     height: 19,
@@ -241,13 +241,13 @@ const styles = StyleSheet.create({
     width: 19,
   },
   markerPinHole: {
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.deepNavy,
     borderRadius: 3,
     height: 5,
     width: 5,
   },
   markerPlusHorizontal: {
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.deepNavy,
     borderRadius: 1,
     height: 3,
     position: 'absolute',
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     width: 11,
   },
   markerPlusVertical: {
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.deepNavy,
     borderRadius: 1,
     height: 11,
     position: 'absolute',

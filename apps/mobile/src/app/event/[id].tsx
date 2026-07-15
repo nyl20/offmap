@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -6,16 +7,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
+import { fetchEventById } from '@/data/events';
 import { mockEvents } from '@/data/mock-events';
 import type { OffmapEvent } from '@/types/event';
 
-const photoAccents = [Palette.electricPurple, Palette.hotPink, Palette.posterOrange];
+const photoAccents = [Palette.powderBlue, Palette.sunflowerGold, Palette.coral];
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const event = mockEvents.find((item) => item.id === id) ?? mockEvents[0];
+  const mockEvent = mockEvents.find((item) => item.id === id);
+  const { data: fetchedEvent, error, isLoading } = useQuery({
+    enabled: Boolean(id && !mockEvent),
+    queryKey: ['event', id],
+    queryFn: () => fetchEventById(id),
+  });
+  const event = mockEvent ?? fetchedEvent ?? mockEvents[0];
   const eventDate = formatEventDate(event.startTime);
   const eventTime = `${formatEventTime(event.startTime)} - ${formatEventTime(event.endTime)}`;
+
+  if (!mockEvent && isLoading) {
+    return (
+      <ThemedView style={[styles.container, styles.loadingState]}>
+        <Stack.Screen options={{ title: 'Event' }} />
+        <ThemedText style={styles.bodyText}>Loading event...</ThemedText>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -34,7 +51,7 @@ export default function EventDetailScreen() {
             <ThemedText style={styles.categoryLabel}>{event.category}</ThemedText>
             <ThemedText style={styles.title}>{event.title}</ThemedText>
             <View style={styles.venueRow}>
-              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.hotPink} />
+              <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.sunflowerGold} />
               <ThemedText numberOfLines={2} style={styles.venueText}>
                 {event.venueName} - {event.address}
               </ThemedText>
@@ -69,19 +86,22 @@ export default function EventDetailScreen() {
             <View style={styles.sharedNote}>
               <View style={styles.sharedAvatar}>
                 <ThemedText style={styles.sharedAvatarText}>
-                  {(event.sharedBy ?? 'O').slice(0, 1)}
+                  {(event.sharedBy ?? event.sourceName ?? 'O').slice(0, 1)}
                 </ThemedText>
               </View>
               <View style={styles.sharedCopy}>
                 <ThemedText style={styles.sharedTitle}>
-                  {event.sharedBy ?? 'Someone local'} heard about this
+                  {event.sharedBy ?? event.sourceName ?? 'OFFMAP'} shared this
                 </ThemedText>
                 <ThemedText style={styles.sharedMeta}>
-                  {event.sharedByHandle ?? '@offmap'} - {event.heardAt ?? 'shared with the community'}
+                  {event.sharedByHandle ?? event.categoryLabels?.join(', ') ?? '@offmap'} -{' '}
+                  {event.heardAt ?? 'approved event source'}
                 </ThemedText>
-                <ThemedText style={styles.sharedBody}>"{event.communityNote}"</ThemedText>
+                <ThemedText style={styles.sharedBody}>
+                  "{event.communityNote ?? event.description}"
+                </ThemedText>
                 <ThemedText style={styles.confirmedText}>
-                  {event.confirmations ?? 1} locals confirmed this tip
+                  {error ? 'Could not refresh this event from Supabase.' : 'Reviewed for display on OFFMAP'}
                 </ThemedText>
               </View>
             </View>
@@ -116,7 +136,7 @@ export default function EventDetailScreen() {
                 <SymbolView
                   name={{ ios: 'chevron.right', web: 'chevron_right' }}
                   size={15}
-                  tintColor={Palette.vintageBerry}
+                  tintColor={Palette.sunflowerGold}
                 />
               </Pressable>
             ) : (
@@ -203,7 +223,12 @@ function formatEventTime(value: string) {
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: Palette.deepNavy,
     flex: 1,
+  },
+  loadingState: {
+    justifyContent: 'center',
+    padding: 24,
   },
   hero: {
     gap: 18,
@@ -214,7 +239,7 @@ const styles = StyleSheet.create({
     height: 220,
     overflow: 'hidden',
     borderRadius: 12,
-    backgroundColor: Palette.teal,
+    backgroundColor: Palette.glassBlue,
   },
   heroGlow: {
     position: 'absolute',
@@ -223,7 +248,7 @@ const styles = StyleSheet.create({
     width: 122,
     height: 122,
     borderRadius: 61,
-    backgroundColor: Palette.posterOrange,
+    backgroundColor: Palette.sunflowerGold,
   },
   heroStage: {
     position: 'absolute',
@@ -231,7 +256,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 78,
-    backgroundColor: 'rgba(26, 5, 162, 0.34)',
+    backgroundColor: 'rgba(6, 26, 50, 0.48)',
   },
   heroShape: {
     position: 'absolute',
@@ -250,7 +275,7 @@ const styles = StyleSheet.create({
     bottom: 34,
     width: 64,
     height: 72,
-    backgroundColor: Palette.frostedBlue,
+    backgroundColor: Palette.powderBlue,
     transform: [{ rotate: '11deg' }],
   },
   heroShapeThree: {
@@ -258,19 +283,19 @@ const styles = StyleSheet.create({
     top: 54,
     width: 44,
     height: 44,
-    backgroundColor: Palette.raspberryRed,
+    backgroundColor: Palette.coral,
   },
   heroCopy: {
     gap: 8,
   },
   categoryLabel: {
-    color: Palette.hotPink,
+    color: Palette.sunflowerGold,
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'capitalize',
   },
   title: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 34,
     fontWeight: '800',
     lineHeight: 38,
@@ -282,7 +307,7 @@ const styles = StyleSheet.create({
   },
   venueText: {
     flex: 1,
-    color: Palette.ink,
+    color: Palette.powderBlue,
     fontSize: 15,
     fontWeight: '500',
     lineHeight: 20,
@@ -304,8 +329,8 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 14,
     borderRadius: 10,
-    backgroundColor: Palette.paper,
-    borderColor: Palette.posterOrange,
+    backgroundColor: Palette.glassStrong,
+    borderColor: Palette.bone,
     borderWidth: 2,
   },
   factIcon: {
@@ -314,15 +339,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Palette.electricPurple,
+    backgroundColor: Palette.powderBlue,
   },
   factLabel: {
-    color: Palette.hotPink,
+    color: Palette.sunflowerGold,
     fontSize: 12,
     fontWeight: '800',
   },
   factValue: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 19,
@@ -331,13 +356,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 22,
     fontWeight: '800',
     lineHeight: 28,
   },
   bodyText: {
-    color: Palette.ink,
+    color: Palette.powderBlue,
     fontSize: 16,
     fontWeight: '500',
     lineHeight: 24,
@@ -351,7 +376,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: Palette.electricPurple,
+    backgroundColor: Palette.glassBlue,
   },
   tagText: {
     color: Palette.paper,
@@ -363,8 +388,8 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 14,
     borderRadius: 10,
-    backgroundColor: Palette.plum,
-    borderColor: Palette.hotPink,
+    backgroundColor: Palette.glassStrong,
+    borderColor: Palette.bone,
     borderWidth: 2,
   },
   sharedAvatar: {
@@ -373,10 +398,10 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Palette.posterOrange,
+    backgroundColor: Palette.sunflowerGold,
   },
   sharedAvatarText: {
-    color: Palette.paper,
+    color: Palette.deepNavy,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -385,25 +410,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sharedTitle: {
-    color: Palette.paper,
+    color: Palette.mintCream,
     fontSize: 15,
     fontWeight: '700',
     lineHeight: 20,
   },
   sharedMeta: {
-    color: '#FFD8C3',
+    color: Palette.powderBlue,
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 17,
   },
   sharedBody: {
-    color: Palette.paper,
+    color: Palette.mintCream,
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 21,
   },
   confirmedText: {
-    color: Palette.posterOrange,
+    color: Palette.sunflowerGold,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
@@ -424,7 +449,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 58,
-    backgroundColor: 'rgba(36, 25, 30, 0.28)',
+    backgroundColor: 'rgba(6, 26, 50, 0.42)',
   },
   photoLight: {
     position: 'absolute',
@@ -433,7 +458,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    backgroundColor: 'rgba(238, 244, 237, 0.38)',
   },
   photoTable: {
     position: 'absolute',
@@ -442,7 +467,7 @@ const styles = StyleSheet.create({
     bottom: 36,
     height: 22,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    backgroundColor: 'rgba(238, 244, 237, 0.38)',
   },
   photoDetail: {
     position: 'absolute',
@@ -450,14 +475,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    backgroundColor: 'rgba(238, 244, 237, 0.48)',
   },
   photoCaption: {
     position: 'absolute',
     left: 14,
     right: 14,
     bottom: 12,
-    color: Palette.paper,
+    color: Palette.mintCream,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -467,8 +492,8 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 14,
     borderRadius: 10,
-    backgroundColor: Palette.paper,
-    borderColor: Palette.hotPink,
+    backgroundColor: Palette.glassStrong,
+    borderColor: Palette.bone,
     borderWidth: 2,
   },
   externalIcon: {
@@ -477,19 +502,19 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Palette.electricPurple,
+    backgroundColor: Palette.powderBlue,
   },
   externalCopy: {
     flex: 1,
     gap: 2,
   },
   externalTitle: {
-    color: Palette.ink,
+    color: Palette.mintCream,
     fontSize: 15,
     fontWeight: '800',
   },
   externalUrl: {
-    color: Palette.hotPink,
+    color: Palette.powderBlue,
     fontSize: 12,
     fontWeight: '500',
   },
