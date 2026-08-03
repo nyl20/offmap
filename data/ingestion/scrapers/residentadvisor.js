@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { splitUSAddress } from './utils.js';
 
 export const name   = 'residentadvisor';

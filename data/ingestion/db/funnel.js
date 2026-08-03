@@ -14,10 +14,24 @@ function parseBool(val) {
   return ['true', '1', 'yes', 'free'].includes(String(val ?? '').toLowerCase().trim());
 }
 
+// upsertVenue and insertEvent classify the same row independently by
+// default — callers that invoke both for one row (runner.js, csv-intake.js)
+// should compute this once and pass it to both to avoid running the
+// classify() regex scan twice per row.
+export function classifyRow(row) {
+  return classify({
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    tags: normalizeTags(row.tags),
+    venue_name: row.venue_name,
+  });
+}
+
 // Upserts a venue via the `upsert_venue` RPC (see offmap/supabase/migrations),
 // which does the PostGIS point construction and COALESCE-based progressive
 // enrichment (never overwrite an already-set value) in one round trip.
-export async function upsertVenue(db, row) {
+export async function upsertVenue(db, row, classification) {
   const { venue_name: name, venue_address: address, venue_lat: lat, venue_lng: lng, source_name } = row;
 
   // Use scraper-supplied address parts when given, otherwise best-effort split
@@ -36,13 +50,9 @@ export async function upsertVenue(db, row) {
   // way this is the only place venue categorization happens — see
   // classify.js. Progressive: upsert_venue unions these into any categories
   // already stored, so a venue's categories grow as more events tag it.
-  const { categories, subCategories } = classify({
-    title: row.title,
-    description: row.description,
-    category: row.category,
-    tags: normalizeTags(row.tags),
-    venue_name: name,
-  });
+  // Callers that also call insertEvent for this row should pass a
+  // precomputed classification (via classifyRow) to avoid classifying twice.
+  const { categories, subCategories } = classification ?? classifyRow(row);
 
   // Write pre-geocoded coords directly — saves Mapbox API calls.
   // Treat scraper-supplied coordinates as fully trusted (confidence 1.0).
@@ -74,18 +84,12 @@ export async function upsertVenue(db, row) {
 // ON CONFLICT (source_url) DO NOTHING and the last_verified_at refresh in one
 // round trip. Returns true if a new row was inserted, false if it was a
 // duplicate source_url.
-export async function insertEvent(db, venueId, row, fetchedAt) {
+export async function insertEvent(db, venueId, row, fetchedAt, classification) {
   const tagList = normalizeTags(row.tags);
 
   const normalizedTitle = normalizeText(row.title);
   const searchText = buildSearchText(row.title, row.description, row.venue_name, tagList, row.category);
-  const { categories, subCategories } = classify({
-    title: row.title,
-    description: row.description,
-    category: row.category,
-    tags: tagList,
-    venue_name: row.venue_name,
-  });
+  const { categories, subCategories } = classification ?? classifyRow(row);
 
   // ticket_url / image_source_url fall back to source_url when the scraper
   // doesn't distinguish a separate link — for most sources the event's own
@@ -129,6 +133,12 @@ export async function insertEvent(db, venueId, row, fetchedAt) {
   return data;
 }
 
+export async function purgePastEvents(db) {
+  const { data, error } = await db.rpc('purge_past_events');
+  if (error) throw new Error(`purge_past_events failed: ${error.message}`);
+  return data;
+}
+
 export async function recomputeCanDisplay(db) {
   const { data, error } = await db.rpc('recompute_can_display');
   if (error) throw new Error(`recompute_can_display failed: ${error.message}`);
@@ -145,4 +155,16 @@ export async function recomputeCompletenessScores(db) {
   const { data, error } = await db.rpc('recompute_completeness_scores');
   if (error) throw new Error(`recompute_completeness_scores failed: ${error.message}`);
   return data;
+}
+
+export async function recomputeVenueCompletenessScores(db) {
+  const { data, error } = await db.rpc('recompute_venue_completeness_scores');
+  if (error) throw new Error(`recompute_venue_completeness_scores failed: ${error.message}`);
+  return data;
+}
+
+export async function mergeDuplicateVenues(db) {
+  const { data, error } = await db.rpc('merge_duplicate_venues');
+  if (error) throw new Error(`merge_duplicate_venues failed: ${error.message}`);
+  return { groupCount: data.group_count, mergedCount: data.merged_count };
 }

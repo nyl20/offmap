@@ -27,7 +27,7 @@ async function extractImageText(imagePath) {
     : 'image/jpeg';
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-flash-latest',
     contents: [{
       role: 'user',
       parts: [

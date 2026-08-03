@@ -1,5 +1,5 @@
 import { getDb } from '../db/supabase.js';
-import { upsertVenue, insertEvent, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores } from '../db/funnel.js';
+import { upsertVenue, insertEvent, classifyRow, purgePastEvents, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores, recomputeVenueCompletenessScores, mergeDuplicateVenues } from '../db/funnel.js';
 import { geocodePendingVenues, backfillNeighborhoods } from '../geocoding/mapbox.js';
 import { isExcludedAudience } from '../scrapers/utils.js';
 import * as reddit        from '../scrapers/reddit.js';
@@ -19,6 +19,7 @@ import * as residentadvisor from '../scrapers/residentadvisor.js';
 import * as nycopendata     from '../scrapers/nycopendata.js';
 import * as brooklynmuseum  from '../scrapers/brooklynmuseum.js';
 import * as met             from '../scrapers/met.js';
+import * as museums         from '../scrapers/museums.js';
 import * as localSpots      from '../scrapers/local-spots.js';
 import * as instagram        from '../scrapers/instagram.js';
 
@@ -27,7 +28,7 @@ const SCRAPERS = [
   theskint, untappedcities, luma, partiful,
   eventbrite, dice, thrillist,
   donyc, nycparks, residentadvisor, nycopendata,
-  brooklynmuseum, met,
+  brooklynmuseum, met, museums,
   localSpots,
   instagram,
 ];
@@ -164,8 +165,9 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
         continue;
       }
       try {
-        const venueId = await upsertVenue(db, row);
-        const inserted = await insertEvent(db, venueId, row, fetchedAt);
+        const classification = classifyRow(row);
+        const venueId = await upsertVenue(db, row, classification);
+        const inserted = await insertEvent(db, venueId, row, fetchedAt, classification);
         if (inserted) summary.inserted++;
         else          summary.skipped++; // duplicate source_url
       } catch (rowErr) {
@@ -185,6 +187,14 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
     });
   }
 
+  // Belt-and-suspenders: the `purge-past-events` pg_cron job (see
+  // offmap/supabase/migrations) already deletes events on an hourly
+  // schedule regardless of whether scraping runs, but purge here too in
+  // case pg_cron isn't enabled on this Supabase project.
+  console.log('\n[runner] purging past events…');
+  const purgedCount = await purgePastEvents(db);
+  console.log(`[runner] purged ${purgedCount} past events`);
+
   // Geocode any venues the scrapers didn't supply coords for
   if (!skipGeocode && process.env.MAPBOX_TOKEN) {
     console.log('\n[geocoder] geocoding new venues without coordinates…');
@@ -195,6 +205,16 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
     const nb = await backfillNeighborhoods();
     console.log(`[geocoder] ${nb.resolved} neighborhoods resolved, ${nb.failed} failed`);
   }
+
+  console.log('\n[runner] recomputing venue completeness scores…');
+  await recomputeVenueCompletenessScores(db);
+
+  console.log('[runner] merging duplicate venues…');
+  const venueMerge = await mergeDuplicateVenues(db);
+  console.log(`[runner] merged ${venueMerge.mergedCount} venues across ${venueMerge.groupCount} duplicate groups`);
+
+  console.log('[runner] recomputing venue completeness scores (post-merge)…');
+  await recomputeVenueCompletenessScores(db);
 
   console.log('\n[runner] recomputing can_display…');
   const displayCount = await recomputeCanDisplay(db);

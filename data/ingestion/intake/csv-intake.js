@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { readFileSync } from 'fs';
 import { getDb } from '../db/supabase.js';
-import { upsertVenue, insertEvent } from '../db/funnel.js';
+import { upsertVenue, insertEvent, classifyRow } from '../db/funnel.js';
 
 // Required CSV columns
 const REQUIRED_FIELDS = ['title', 'venue_name', 'venue_address', 'start_time', 'source_url'];
@@ -59,9 +59,10 @@ export async function ingestCsv(filePath) {
     }
 
     try {
-      const venueId = await upsertVenue(db, row);
+      const classification = classifyRow(row);
+      const venueId = await upsertVenue(db, row, classification);
       const confidenceScore = row.confidence_score ? parseFloat(row.confidence_score) : null;
-      const inserted = await insertEvent(db, venueId, { ...row, confidence_score: confidenceScore }, fetchedAt);
+      const inserted = await insertEvent(db, venueId, { ...row, confidence_score: confidenceScore }, fetchedAt, classification);
 
       if (inserted) summary.inserted++;
       else summary.skipped++;

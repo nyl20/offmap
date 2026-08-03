@@ -65,14 +65,13 @@ Pass `--skip-geocode` to any scrape command to skip the Mapbox geocoding and rec
 | `REDDIT_CLIENT_ID` | No | Enables Reddit scraper — create a free "script" app at reddit.com/prefs/apps |
 | `REDDIT_CLIENT_SECRET` | No | Paired with `REDDIT_CLIENT_ID` |
 | `EVENTBRITE_TOKEN` | No | Reserved for future use — Eventbrite's search API is currently deprecated; the scraper uses HTML scraping instead (no token required) |
-| `INSTAGRAM_USERNAME` | No | Instagram username for the scraper's burner account — enables `instagram.js` |
-| `INSTAGRAM_PASSWORD` | No | Password for the burner account — only used as a fallback if no saved session file exists |
+| `APIFY_TOKEN` | No | Apify token (apify.com → Settings → Integrations) — runs the `apify/instagram-post-scraper` actor to fetch posts, enables `instagram.js` |
 | `GEMINI_API_KEY` | No | Google Gemini API key (free tier) — used by the Instagram scraper for image OCR and event parsing. Get one at aistudio.google.com |
 | `PORT` | No | Server port (default: `3000`) |
 
 **Mapbox free tier:** geocoding is billed per venue address, not per scrape run. Each address is geocoded once and stored permanently. The map itself counts one load per user session.
 
-**Gemini free tier:** 1,500 requests/day on `gemini-2.0-flash` — sufficient for 30 accounts at ~5 posts/day with two AI calls per post.
+**Gemini free tier:** 1,500 requests/day on `gemini-flash-latest` — sufficient for 30 accounts at ~5 posts/day with two AI calls per post.
 
 ---
 
@@ -91,37 +90,37 @@ Schema lives in `offmap/supabase/migrations/`, not in this app — it's shared w
 
 ## File reference
 
-### `src/db/`
+### `db/`
 
 | File | Purpose |
 |---|---|
 | `supabase.js` | `getDb()` returns a singleton `@supabase/supabase-js` client authenticated with `SUPABASE_SERVICE_ROLE_KEY` — server-side only |
-| `funnel.js` | Shared upsert logic used by both `runner.js` and `csv-intake.js`: `upsertVenue`/`insertEvent` (call the `upsert_venue`/`insert_event` RPCs — see [Database](#database-supabase)), `recomputeCanDisplay`/`recomputeDuplicateGroups` (call their respective RPCs) |
+| `funnel.js` | Shared upsert logic used by both `runner.js` and `csv-intake.js`: `classifyRow` (runs `classify()` once per row so callers can pass the same result into both of the below instead of classifying twice), `upsertVenue`/`insertEvent` (call the `upsert_venue`/`insert_event` RPCs — see [Database](#database-supabase)), `recomputeCanDisplay`/`recomputeDuplicateGroups`/`recomputeCompletenessScores`/`recomputeVenueCompletenessScores`/`mergeDuplicateVenues`/`purgePastEvents` (call their respective RPCs) |
 
-### `src/intake/`
+### `intake/`
 
 | File | Purpose |
 |---|---|
 | `csv-intake.js` | Parses a CSV file, validates required fields, then runs each row through the same `upsertVenue`/`insertEvent` as the scrapers (address splitting, `normalized_title`/`search_text`, etc.). Duplicate `source_url` values are silently skipped. |
 
-### `src/geocoding/`
+### `geocoding/`
 
 | File | Purpose |
 |---|---|
-| `mapbox.js` | Geocodes venues via the Mapbox Geocoding API. Uses `venue name + address` when the address is generic ("New York, NY"). Skips placeholder "New York City" venues. Stores results permanently (via the `set_venue_geocode` RPC, which builds the PostGIS point) so each address is only ever billed once. Also exports `backfillNeighborhoods()` — a reverse-geocode pass that fills in `neighborhood` for venues that already have coordinates from their own scraper (and therefore never went through forward geocoding) — this one's a plain column update, no RPC needed. |
+| `mapbox.js` | Geocodes venues via the Mapbox Geocoding API. Uses `venue name + address` when the address is generic ("New York, NY"). Skips placeholder "New York City" venues. Caches results per geocode query within a run so venues sharing an address (e.g. several spaces in the same building) only cost one Mapbox call. Stores results permanently (via the `set_venue_geocode` RPC, which builds the PostGIS point) so each address is only ever billed once. Also exports `backfillNeighborhoods()` — a reverse-geocode pass that fills in `neighborhood` for venues that already have coordinates from their own scraper (and therefore never went through forward geocoding) — this one's a plain column update, no RPC needed. |
 
-### `src/api/`
+### `api/`
 
 | File | Purpose |
 |---|---|
-| `server.js` | Express server. Serves `public/index.html` with the Mapbox token injected. Three endpoints: `GET /api/events` (GeoJSON, filtered to NYC bounds, includes `source_name` for panel attribution), `GET /api/categories`, `POST /api/events/:id/status` (approve/reject). |
+| `server.js` | Express server. Serves `public/index.html` with the Mapbox token injected. Three endpoints: `GET /api/events` (GeoJSON, filtered to NYC bounds, includes `source_name` for panel attribution), `GET /api/categories` (5-minute in-memory cache), `POST /api/events/:id/status` (approve/reject; fires `recompute_can_display` in the background instead of making the caller wait on a full-table pass). |
 
-### `src/scrapers/`
+### `scrapers/`
 
 | File | Purpose |
 |---|---|
 | `utils.js` | Shared helpers — date/time extraction from free text, price/free detection, text normalization (`normalizeText`, `buildSearchText`), `extractAgeRestriction`, `splitUSAddress` (handles commas, semicolons, trailing "USA"/"United States", and city+state+zip merged into one segment), `buildWeeklyRRule` |
-| `runner.js` | Orchestrates all scrapers: logs a `scrape_runs` row per source, inserts rows into Supabase, geocodes new venues, then recomputes `can_display` (from current venue/review state) and duplicate groups (exact-match on `normalized_title` + calendar date) via RPC. There's no more `backfillDerivedFields` pass — every insert now goes through `upsertVenue`/`insertEvent`, which always compute these fields, so there are no legacy NULL gaps to backfill on a fresh Postgres table. A scraper that exports `venueOnly = true` + `fetchVenues()` (currently only `museums.js`) is routed through `upsertVenue()` alone, skipping `insertEvent()` entirely — for sources that supply permanent venues with no time-bound event to attach. |
+| `runner.js` | Orchestrates all scrapers: logs a `scrape_runs` row per source, inserts rows into Supabase, purges past events, geocodes new venues, then recomputes venue completeness scores, merges duplicate venues, and recomputes `can_display` (from current venue/review state), duplicate groups (exact-match on `normalized_title` + calendar date), and completeness scores via RPC. There's no more `backfillDerivedFields` pass — every insert now goes through `upsertVenue`/`insertEvent`, which always compute these fields, so there are no legacy NULL gaps to backfill on a fresh Postgres table. A scraper that exports `venueOnly = true` + `fetchVenues()` (currently `museums.js` and `local-spots.js`) is routed through `upsertVenue()` alone, skipping `insertEvent()` entirely — for sources that supply permanent venues with no time-bound event to attach. |
 | `bbg.js` | Brooklyn Botanic Garden events calendar. Static HTML (`li.dontmiss-event`), no key needed. `candidate` status. Supplies `external_id` (URL slug), `organizer_name` (= venue, BBG runs its own events), `recurrence_rule` for "Wednesdays & Fridays"-style listings. |
 | `moma.js` | MoMA calendar. Tries JSON-LD then HTML. Currently Cloudflare-blocked; returns 0 with a warning. |
 | `reddit.js` | `r/nycevents` via Reddit OAuth. Regex-extracts dates/venues/age restrictions from post titles. Requires `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET`. `needs_review`. Supplies `external_id` (Reddit post id). |
@@ -140,17 +139,17 @@ Schema lives in `offmap/supabase/migrations/`, not in this app — it's shared w
 | `brooklynmuseum.js` | **Stub** — Vercel-blocked; needs API key from brooklynmuseum.org/opencollection/api. See file for notes. |
 | `met.js` | **Stub** — Vercel-blocked; no events-specific API. See file for notes. |
 | `museums.js` | NYC museums & art galleries as permanent **venues**, not events — OpenStreetMap Overpass API (`tourism=museum`/`tourism=gallery` within the NYC bbox), no key needed. Exports `fetchVenues()` + `venueOnly = true` instead of `fetchEvents()`; `runner.js` routes these through `upsertVenue()` only (never `insertEvent()`). Supplies coordinates directly (skips Mapbox forward geocoding) and the raw OSM `opening_hours` string into `venue_opening_hours`. Writes OSM's `addr:suburb`/`is_in:neighbourhood` into `neighborhood` directly when present; venues OSM didn't tag with one fall through to the regular `backfillNeighborhoods()` reverse-geocode pass. Source name logged as `osm_museums`. |
-| `instagram.js` | Instagram public accounts listed in `config/instagram_accounts.json`. Spawns `src/instagram/fetch.py` (Python/Instaloader) to fetch new posts, then calls `extractMedia` (Gemini Vision OCR on images and video keyframes) and `parseEvent` (Gemini structured extraction) per post. Requires `INSTAGRAM_USERNAME`, `INSTAGRAM_PASSWORD`, and `GEMINI_API_KEY`. All events land with `needs_review` status — nothing displays until approved. Source name: `instagram/@username`. Run alone with `npm run scrape:instagram`. |
+| `instagram.js` | Instagram public accounts listed in `config/instagram_accounts.json`. Calls `fetchApifyPosts` (runs the `apify/instagram-post-scraper` Apify actor) to fetch new posts, then `extractMedia` (Gemini Vision OCR on images and video keyframes) and `parseEvents` (Gemini structured extraction, one post can yield several events e.g. a roundup) per post. Requires `APIFY_TOKEN` and `GEMINI_API_KEY`. All events land with `needs_review` status — nothing displays until approved. Source name: `instagram/@username`. Run alone with `npm run scrape:instagram`. |
 
-### `src/instagram/`
+### `scrapers/instagram/`
 
-The AI-powered extraction layer used exclusively by `instagram.js`. Requires a Gemini API key (free tier).
+The AI-powered extraction layer used exclusively by `instagram.js`. Requires a Gemini API key (free tier) and an Apify token.
 
 | File | Purpose |
 |---|---|
-| `fetch.py` | Python script (requires `pip install instaloader`). Reads accounts from `config/instagram_accounts.json`, loads a saved session from `~/.config/instaloader/session-<username>` (falls back to password login if absent), fetches only posts newer than the last-seen shortcode per account (state tracked in `data/instagram_state.json`), downloads media to `/tmp/instagram_media/`, and emits one JSONL line per post to stdout. Rate-limits with a 30–90s random delay between accounts. Pass `--dry-run` to skip login, media download, and state writes. |
-| `extractMedia.js` | Accepts a list of local media paths. Images are base64-encoded and sent to Gemini Vision (`gemini-2.0-flash`). Videos are first split into keyframes via `ffmpeg` (1 frame every 10s), then each frame is sent to Gemini Vision. Returns all extracted text concatenated. |
-| `parseEvent.js` | Sends caption text + extracted media text to Gemini (`gemini-2.0-flash`) with a structured prompt. Resolves relative dates against the post's timestamp, filters categories to the controlled vocab, and returns a structured event object or `null` if no event is found in the post. |
+| `fetchApify.js` | Runs the `apify/instagram-post-scraper` actor (via `apify-client`) for every account in `config/instagram_accounts.json`, downloads each post's media (images/video, including carousel child posts) to `/tmp/instagram_media/`, and returns posts normalized to `{ shortcode, username, caption, timestamp, media_type, media_paths, media_urls, post_url }`. |
+| `extractMedia.js` | Accepts a list of local media paths. Images are base64-encoded and sent to Gemini Vision (`gemini-flash-latest`). Videos are first split into keyframes via `ffmpeg` (1 frame every 10s), then each frame is sent to Gemini Vision. Returns all extracted text concatenated. |
+| `parseEvent.js` | Sends caption text + extracted media text to Gemini (`gemini-flash-latest`) with a structured prompt and JSON response schema. Resolves relative dates against the post's timestamp, filters categories to the controlled vocab, and returns an array of structured event objects (empty if the post describes no upcoming events — a post can also describe several, e.g. a roundup). Exports `parseEvents`. |
 
 ### `config/`
 
@@ -158,14 +157,15 @@ The AI-powered extraction layer used exclusively by `instagram.js`. Requires a G
 |---|---|
 | `instagram_accounts.json` | List of Instagram usernames to scrape. Edit this file to add or remove accounts — no code changes needed. |
 
-### `scripts/`
+### `pipelines/`
 
 | File | Purpose |
 |---|---|
 | `migrate-sqlite-to-supabase.js` | CLI entry point for `npm run migrate-sqlite` — one-time backfill, not part of the regular pipeline |
 | `intake.js` | CLI entry point for `npm run intake <file.csv>` |
 | `geocode-pending.js` | CLI entry point for `npm run geocode-pending` |
-| `scrape.js` | CLI entry point for `npm run scrape`. Pass scraper names to run a subset (e.g. `node scripts/scrape.js luma instagram`). Pass `--skip-geocode` to skip the Mapbox geocoding and recompute passes. |
+| `backfill-categories.js` | CLI entry point for `npm run backfill-categories` |
+| `scrape.js` | CLI entry point for `npm run scrape`. Pass scraper names to run a subset (e.g. `node pipelines/scrape.js luma instagram`). Pass `--skip-geocode` to skip the Mapbox geocoding and recompute passes. |
 | `serve.js` | CLI entry point for `npm run serve` |
 
 ### `public/`

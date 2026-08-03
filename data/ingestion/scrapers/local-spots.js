@@ -38,7 +38,15 @@ function buildQuery() {
     '"shop"="books"',      '"shop"="music"',
     '"amenity"="community_centre"',
     '"amenity"="arts_centre"',
-    '"craft"',
+    // Explicit allowlist of art/craft *studio* subtypes — NOT a bare
+    // `"craft"` filter. OSM's craft=* key also covers service/repair trades
+    // (craft=dry_cleaning, craft=shoemaker, craft=tailor, craft=key_cutter,
+    // etc.), which pulled dry cleaners and shoe repair shops in as "Arts &
+    // Crafts" venues (they all collapsed to the same generic 'Craft' hint
+    // in getCategory() below). Add more values here only if they're genuine
+    // art/craft studios a visitor would seek out.
+    '"craft"="pottery"', '"craft"="jeweller"', '"craft"="sculptor"',
+    '"craft"="printmaker"', '"craft"="weaver"',
   ];
   const lines = tags.flatMap(t => [`node[${t}](${bbox});`, `way[${t}](${bbox});`]).join('\n      ');
   return `[out:json][timeout:90];\n    (\n      ${lines}\n    );\n    out center;`;

@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { getDb } from '../db/supabase.js';
 
 const MAPBOX_GEOCODING_URL = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
@@ -107,7 +106,14 @@ export async function geocodePendingVenues({ delayMs = 200 } = {}) {
   // Addresses that are too generic to geocode accurately on their own
   const GENERIC_ADDR_RE = /^new york,?\s*ny$/i;
 
-  for (const venue of pending) {
+  // Multiple pending venues can share the same address string in one run
+  // (e.g. several spaces in the same building) — cache by geocode query so
+  // each distinct address only ever costs one Mapbox call per run, not one
+  // per venue row.
+  const geocodeCache = new Map();
+
+  for (let i = 0; i < pending.length; i++) {
+    const venue = pending[i];
     // Skip "New York City" placeholder venues — they have no specific location
     if (/^new york city$/i.test(venue.name) && GENERIC_ADDR_RE.test(venue.address)) {
       console.log(`[geocode] skipping generic placeholder venue ${venue.id}: "${venue.name}"`);
@@ -120,8 +126,16 @@ export async function geocodePendingVenues({ delayMs = 200 } = {}) {
       ? `${venue.name}, New York, NY`
       : venue.address;
 
+    let calledMapbox = false;
     try {
-      const result = await geocodeAddress(geocodeQuery, token);
+      let result;
+      if (geocodeCache.has(geocodeQuery)) {
+        result = geocodeCache.get(geocodeQuery);
+      } else {
+        calledMapbox = true;
+        result = await geocodeAddress(geocodeQuery, token);
+        geocodeCache.set(geocodeQuery, result);
+      }
 
       if (!result) {
         console.warn(`[geocode] No result for venue ${venue.id}: "${geocodeQuery}"`);
@@ -144,7 +158,8 @@ export async function geocodePendingVenues({ delayMs = 200 } = {}) {
       summary.failed++;
     }
 
-    if (delayMs > 0 && pending.indexOf(venue) < pending.length - 1) {
+    // No need to rate-limit a cache hit — no Mapbox call was made.
+    if (calledMapbox && delayMs > 0 && i < pending.length - 1) {
       await new Promise(r => setTimeout(r, delayMs));
     }
   }

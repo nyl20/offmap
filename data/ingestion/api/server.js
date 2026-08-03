@@ -22,6 +22,12 @@ const EVENT_COLUMNS = `
     latitude, longitude, neighborhood, venue_opening_hours, geocode_provider, geocode_confidence, geocoded_at)
 `;
 
+// Categories change only when new venues/events are scraped in (at most a
+// few times a day), so a short TTL cache saves a full-table scan on every
+// filter-bar render without meaningfully delaying new categories showing up.
+const CATEGORIES_CACHE_MS = 5 * 60 * 1000;
+let categoriesCache = null; // { at, data }
+
 export function createServer() {
   const app = express();
   const db = getDb();
@@ -136,6 +142,10 @@ export function createServer() {
   // Distinct categories for filter UI
   app.get('/api/categories', async (req, res) => {
     try {
+      if (categoriesCache && Date.now() - categoriesCache.at < CATEGORIES_CACHE_MS) {
+        return res.json(categoriesCache.data);
+      }
+
       const { data, error } = await db
         .from('events')
         .select('category, venues!inner(longitude, latitude)')
@@ -147,6 +157,7 @@ export function createServer() {
       if (error) throw error;
 
       const categories = [...new Set(data.map(r => r.category))].sort();
+      categoriesCache = { at: Date.now(), data: categories };
       res.json(categories);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -172,8 +183,11 @@ export function createServer() {
 
       // can_display is a stored column, not computed on read — without this,
       // an approved event stays invisible until the next `npm run scrape`.
-      const { error: recomputeError } = await db.rpc('recompute_can_display');
-      if (recomputeError) throw recomputeError;
+      // Recompute is a full-table pass; don't make the admin wait on it —
+      // fire it off and respond immediately, logging failures server-side.
+      db.rpc('recompute_can_display').then(({ error: recomputeError }) => {
+        if (recomputeError) console.error(`[server] recompute_can_display failed: ${recomputeError.message}`);
+      });
 
       res.json({ ok: true, id: Number(req.params.id), status });
     } catch (err) {

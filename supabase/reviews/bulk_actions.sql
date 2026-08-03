@@ -68,9 +68,10 @@ OR description ILIKE ANY (ARRAY[
 
 -- One-time cleanup: purge already-inserted events whose start_time has
 -- already passed, matching the past-event filter added to
--- src/scrapers/runner.js. Going forward, runner.js drops these before
--- they're ever written, so this should not need to be re-run after the
--- next full scrape.
+-- src/scrapers/runner.js. As of migrations/20260717000000_auto_purge_past_events.sql
+-- this now also runs automatically (hourly, via pg_cron's purge_past_events()
+-- job, plus a redundant call in runner.js on every scrape), so this block
+-- should not need to be run by hand again.
 --
 -- DESTRUCTIVE — permanently deletes matching rows, no soft-delete/backup.
 

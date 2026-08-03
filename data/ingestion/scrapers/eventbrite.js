@@ -6,7 +6,6 @@
 //
 // EVENTBRITE_TOKEN is kept in .env for future use if they restore the API.
 
-import fetch from 'node-fetch';
 
 export const name   = 'eventbrite';
 export const envKey = null; // HTML scraping — no token needed
