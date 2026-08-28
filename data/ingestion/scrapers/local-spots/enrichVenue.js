@@ -4,6 +4,31 @@ import { load } from 'cheerio';
 const USER_AGENT = 'offmap-bot/1.0 (NYC events discovery app)';
 const TIMEOUT_MS = 7000;
 
+// A website's meta description/JSON-LD is untrusted third-party content —
+// domains expire, sites get hijacked, and a compromised page can silently
+// replace its own description with unrelated spam (observed in production:
+// a legitimate venue's scraped description came back as Vietnamese
+// gambling-site text after its domain was compromised). Requiring the
+// scraped text to share at least one distinctive word with the venue's own
+// name is a cheap check — same principle as matchedVenueIdentity() in
+// geocoding/mapbox.js, which rejects a geocoder's "match" the same way when
+// it can't verify the result actually pertains to what was asked for. Not
+// foolproof (a legitimate page's copy doesn't always repeat the exact
+// venue name), so this only rejects when the venue name has a distinctive
+// word to check AND that word is absent — it doesn't invent a positive
+// signal that isn't there.
+const STOPWORDS = new Set(['the', 'and', 'for', 'nyc', 'new', 'york', 'shop', 'store']);
+
+function significantWords(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4 && !STOPWORDS.has(w));
+}
+
+function looksRelevant(venueName, text) {
+  const wanted = significantWords(venueName ?? '');
+  if (!wanted.length) return true; // nothing distinctive to verify against
+  return wanted.some(w => text.toLowerCase().includes(w));
+}
+
 function parseJsonLd($) {
   const result = { description: null, image_url: null, phone: null, opening_hours: null };
 
@@ -39,7 +64,7 @@ function parseJsonLd($) {
   return result;
 }
 
-export async function enrichVenue(websiteUrl) {
+export async function enrichVenue(websiteUrl, venueName) {
   const empty = { description: null, image_url: null, phone: null, opening_hours: null };
 
   try {
@@ -64,6 +89,17 @@ export async function enrichVenue(websiteUrl) {
       ?? $('meta[name="description"]').attr('content')
       ?? null;
 
+    const trimmedDescription = description ? description.slice(0, 500).trim() : null;
+
+    // Check the page's own title alongside the description — a hijacked/
+    // parked/repurposed domain (see looksRelevant's doc comment above)
+    // usually replaces both, so this catches more than checking either
+    // field alone. If nothing on the page plausibly relates to the venue,
+    // distrust the whole scrape rather than any single field from it.
+    const pageTitle = $('title').first().text();
+    const relevanceText = [pageTitle, trimmedDescription].filter(Boolean).join(' ');
+    if (relevanceText && !looksRelevant(venueName, relevanceText)) return empty;
+
     const image_url = ld.image_url
       ?? $('meta[property="og:image"]').attr('content')
       ?? null;
@@ -74,7 +110,7 @@ export async function enrichVenue(websiteUrl) {
     })();
 
     return {
-      description: description ? description.slice(0, 500).trim() : null,
+      description: trimmedDescription,
       image_url:   image_url || null,
       phone:       phone || null,
       opening_hours: ld.opening_hours || null,

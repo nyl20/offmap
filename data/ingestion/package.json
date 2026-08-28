@@ -8,6 +8,8 @@
     "intake": "node pipelines/intake.js",
     "geocode-pending": "node pipelines/geocode-pending.js",
     "backfill-categories": "node pipelines/backfill-categories.js",
+    "purge-service-trades": "node pipelines/purge-service-trade-venues.js",
+    "enrich-venues": "node pipelines/enrich-venues.js",
     "serve": "node pipelines/serve.js",
     "scrape": "node pipelines/scrape.js",
     "scrape:instagram": "node pipelines/scrape.js instagram --skip-geocode",

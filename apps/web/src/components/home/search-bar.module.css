@@ -1,0 +1,44 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  flex: 1;
+  min-width: 0;
+}
+
+.bar svg {
+  flex: none;
+  color: var(--color-text-tertiary);
+}
+
+.input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.clear {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+
+.clear:hover {
+  color: var(--color-text);
+}

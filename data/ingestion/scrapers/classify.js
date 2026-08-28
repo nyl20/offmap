@@ -138,6 +138,12 @@ function buildClassificationText({ title, description, category, tags, venue_nam
 /**
  * Classify free-text event/venue fields into the controlled top-level
  * `categories` and freeform `sub_categories`. Pure function of its inputs.
+ *
+ * `subCategoryHint`, when given, is added to sub_categories unconditionally
+ * — it's a scraper-supplied signal (e.g. local-spots.js resolving an OSM
+ * craft=pottery/shop=books tag to a specific sub-category), stronger and
+ * more precise than anything the keyword RULES below could infer from free
+ * text, so it isn't gated behind a regex match.
  */
 export function classify(fields) {
   const text = buildClassificationText(fields);
@@ -153,6 +159,8 @@ export function classify(fields) {
 
   const alias = CATEGORY_ALIASES[String(fields?.category ?? '').toLowerCase().trim()];
   if (alias) categories.add(alias);
+
+  if (fields?.subCategoryHint) subCategories.add(fields.subCategoryHint);
 
   return { categories: [...categories], subCategories: [...subCategories] };
 }

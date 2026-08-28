@@ -1,0 +1,67 @@
+.page {
+  padding: 24px 0 60px;
+  max-width: 760px;
+}
+
+.body {
+  padding-top: 20px;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+
+.venueRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 24px;
+}
+
+.venueRow svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-text-tertiary);
+}
+
+.venueRow b {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.factGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 28px;
+  max-width: 420px;
+}
+
+.section {
+  margin-bottom: 26px;
+}
+
+.section h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+}
+
+.section p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #d5daee;
+  max-width: 640px;
+}

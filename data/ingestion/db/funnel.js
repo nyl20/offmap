@@ -25,6 +25,7 @@ export function classifyRow(row) {
     category: row.category,
     tags: normalizeTags(row.tags),
     venue_name: row.venue_name,
+    subCategoryHint: row.sub_category_hint,
   });
 }
 
@@ -167,4 +168,22 @@ export async function mergeDuplicateVenues(db) {
   const { data, error } = await db.rpc('merge_duplicate_venues');
   if (error) throw new Error(`merge_duplicate_venues failed: ${error.message}`);
   return { groupCount: data.group_count, mergedCount: data.merged_count };
+}
+
+export async function recomputeVenueCanDisplay(db) {
+  const { data, error } = await db.rpc('recompute_venue_can_display');
+  if (error) throw new Error(`recompute_venue_can_display failed: ${error.message}`);
+  return data;
+}
+
+export async function mergeCrossNameDuplicateVenues(db) {
+  const { data, error } = await db.rpc('merge_cross_name_duplicate_venues');
+  if (error) throw new Error(`merge_cross_name_duplicate_venues failed: ${error.message}`);
+  return { mergedCount: data.merged_count };
+}
+
+export async function queueLowConfidenceVenueDuplicates(db) {
+  const { data, error } = await db.rpc('queue_low_confidence_venue_duplicates');
+  if (error) throw new Error(`queue_low_confidence_venue_duplicates failed: ${error.message}`);
+  return data;
 }

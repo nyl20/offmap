@@ -1,0 +1,47 @@
+.backRow {
+  margin-bottom: 14px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.backBtn:hover {
+  color: var(--color-text);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.iconTile {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.subcategoriesWrap {
+  margin-bottom: 8px;
+}

@@ -1,0 +1,84 @@
+.favorite {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(14, 17, 32, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.favorite:focus-visible {
+  outline: 2px solid var(--color-mint);
+  outline-offset: 2px;
+}
+
+.saved {
+  color: var(--color-coral);
+}
+
+.bounce {
+  animation: favoriteBounce 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes favoriteBounce {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.35);
+  }
+  55% {
+    transform: scale(0.9);
+  }
+  75% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.burstLine {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.5px;
+  height: 7px;
+  margin: -3.5px 0 0 -1.25px;
+  background: var(--color-coral);
+  border-radius: 1px;
+  transform-origin: center;
+  transform: rotate(calc(var(--i) * 60deg)) translateY(-15px) scaleY(0.4);
+  opacity: 0;
+  animation: favoriteBurstLine 0.5s ease-out forwards;
+}
+
+@keyframes favoriteBurstLine {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(-15px) scaleY(0.4);
+  }
+  25% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(-19px) scaleY(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(-28px) scaleY(1);
+  }
+}

@@ -1,4 +1,5 @@
 import Mapbox from '@rnmapbox/maps';
+import Constants from 'expo-constants';
 import { Link } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
@@ -11,7 +12,7 @@ import { mockEvents } from '@/data/mock-events';
 import { useEventFilterStore } from '@/store/use-event-filter-store';
 import type { EventCategory, OffmapEvent } from '@/types/event';
 
-const mapboxAccessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+const mapboxAccessToken: string | undefined = Constants.expoConfig?.extra?.mapboxToken;
 const initialEvent = mockEvents[0];
 const initialCenter: [number, number] = [initialEvent.longitude, initialEvent.latitude];
 const quickFilters: { label: string; category?: EventCategory; freeOnly?: boolean }[] = [
@@ -45,7 +46,7 @@ export function OffmapMap() {
       <SafeAreaView style={styles.emptyState}>
         <ThemedText type="title">Map token missing</ThemedText>
         <ThemedText themeColor="textSecondary">
-          Add EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN to your .env file, then reload the app.
+          Add MAPBOX_TOKEN to your .env file, then reload the app.
         </ThemedText>
       </SafeAreaView>
     );

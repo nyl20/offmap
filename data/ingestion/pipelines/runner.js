@@ -1,6 +1,7 @@
 import { getDb } from '../db/supabase.js';
-import { upsertVenue, insertEvent, classifyRow, purgePastEvents, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores, recomputeVenueCompletenessScores, mergeDuplicateVenues } from '../db/funnel.js';
-import { geocodePendingVenues, backfillNeighborhoods } from '../geocoding/mapbox.js';
+import { upsertVenue, insertEvent, classifyRow, purgePastEvents, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores, recomputeVenueCompletenessScores, mergeDuplicateVenues, recomputeVenueCanDisplay, mergeCrossNameDuplicateVenues, queueLowConfidenceVenueDuplicates } from '../db/funnel.js';
+import { geocodePendingVenues, backfillNeighborhoods, backfillAddressDetails } from '../geocoding/mapbox.js';
+import { enrichVenuesFromWebsite } from '../db/enrich-venues.js';
 import { isExcludedAudience } from '../scrapers/utils.js';
 import * as reddit        from '../scrapers/reddit.js';
 import * as bbg           from '../scrapers/bbg.js';
@@ -204,7 +205,17 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
     console.log('\n[geocoder] backfilling neighborhoods for pre-geocoded venues…');
     const nb = await backfillNeighborhoods();
     console.log(`[geocoder] ${nb.resolved} neighborhoods resolved, ${nb.failed} failed`);
+
+    console.log('\n[enrich] backfilling address details for geocoded venues…');
+    const addrResult = await backfillAddressDetails();
+    console.log(`[enrich] ${addrResult.resolved} resolved, ${addrResult.failed} failed`);
   }
+
+  // Outside the skipGeocode guard — this is pure website scraping, no
+  // Mapbox call — so --skip-geocode runs (e.g. scrape:instagram) still get it.
+  console.log('\n[enrich] enriching venues from their websites…');
+  const webResult = await enrichVenuesFromWebsite(db);
+  console.log(`[enrich] ${webResult.enriched} enriched, ${webResult.skipped} skipped`);
 
   console.log('\n[runner] recomputing venue completeness scores…');
   await recomputeVenueCompletenessScores(db);
@@ -213,8 +224,20 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
   const venueMerge = await mergeDuplicateVenues(db);
   console.log(`[runner] merged ${venueMerge.mergedCount} venues across ${venueMerge.groupCount} duplicate groups`);
 
+  console.log('[runner] merging cross-name duplicate venues…');
+  const crossMerge = await mergeCrossNameDuplicateVenues(db);
+  console.log(`[runner] merged ${crossMerge.mergedCount} cross-name duplicates`);
+
+  console.log('[runner] queuing low-confidence duplicate candidates…');
+  const queuedCount = await queueLowConfidenceVenueDuplicates(db);
+  console.log(`[runner] ${queuedCount} new candidate pair(s) queued for review`);
+
   console.log('[runner] recomputing venue completeness scores (post-merge)…');
   await recomputeVenueCompletenessScores(db);
+
+  console.log('[runner] recomputing venue can_display…');
+  const venueDisplayCount = await recomputeVenueCanDisplay(db);
+  console.log(`[runner] can_display refreshed for ${venueDisplayCount} venues`);
 
   console.log('\n[runner] recomputing can_display…');
   const displayCount = await recomputeCanDisplay(db);

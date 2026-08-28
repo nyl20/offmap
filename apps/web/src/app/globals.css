@@ -1,0 +1,84 @@
+/* Design tokens mirrored from packages/shared/src/tokens.ts — CSS custom
+   properties can't import a TS module, so these are hand-maintained in
+   parallel. Keep values identical to tokens.ts (see that file's comment). */
+:root {
+  --color-bg: #1a2036;
+  --color-bg-alt: #1b2138;
+  --color-bg-elevated: #232a47;
+  --color-bg-elevated-2: #2c3456;
+  --color-bg-sheet: #1e2440;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text: #f4f6fc;
+  --color-text-secondary: #8891b3;
+  --color-text-tertiary: #626c93;
+
+  --color-mint: #8de9d5;
+  --color-mint-soft: rgba(141, 233, 213, 0.16);
+  --color-gold: #f0a93e;
+  --color-gold-soft: rgba(240, 169, 62, 0.18);
+  --color-lavender: #9aa8e8;
+  --color-lavender-soft: rgba(154, 168, 232, 0.18);
+  --color-coral: #e2694f;
+  --color-coral-soft: rgba(226, 105, 79, 0.18);
+
+  --font-sans: -apple-system, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 64px;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  --header-height: 72px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0 16px;
+  }
+}

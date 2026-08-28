@@ -1,0 +1,24 @@
+.row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.pill {
+  flex: none;
+  padding: 8px 15px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.pillActive {
+  background: var(--color-mint);
+  color: #10261f;
+  border-color: transparent;
+}

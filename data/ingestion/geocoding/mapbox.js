@@ -236,6 +236,95 @@ export async function backfillNeighborhoods({ delayMs = 200 } = {}) {
 }
 
 /**
+ * Reverse-geocode a single lng/lat pair to street/city/postal details via
+ * Mapbox. Returns { addressLine, city, postalCode } (any field may be null
+ * if Mapbox's response doesn't include it), or null if no address feature
+ * is found.
+ */
+async function reverseGeocodeAddressDetails(lng, lat, token) {
+  const url = `${MAPBOX_GEOCODING_URL}/${lng},${lat}.json?access_token=${token}&types=address&limit=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Mapbox reverse geocode error ${res.status}`);
+  const data = await res.json();
+
+  const feature = data.features?.[0];
+  if (!feature) return null;
+
+  // Mapbox's address features split the street number into `address` and
+  // the street name into `text` — same convention as the venue's own
+  // `address_line` elsewhere in this codebase (splitUSAddress in
+  // scrapers/utils.js), so this stays consistent with rows populated that
+  // way instead of by reverse geocoding.
+  const addressLine = [feature.address, feature.text].filter(Boolean).join(' ') || null;
+  const city = feature.context?.find(c => c.id.startsWith('place.'))?.text ?? null;
+  const postalCode = feature.context?.find(c => c.id.startsWith('postcode.'))?.text ?? null;
+
+  return { addressLine, city, postalCode };
+}
+
+/**
+ * Backfill address_line/city/postal_code for venues that already have a
+ * geocoded location but are missing one or more of those fields — this
+ * happens for scrapers whose source data has no structured address (OSM
+ * nodes without addr:housenumber/addr:street, an Instagram post that only
+ * names a venue) but that DID resolve to real coordinates. Only fills
+ * currently-null columns (progressive enrichment, same principle as
+ * upsert_venue's COALESCE and backfillNeighborhoods above) — never
+ * overwrites a value a scraper already supplied.
+ *
+ * Returns { resolved, failed }
+ */
+export async function backfillAddressDetails({ delayMs = 200 } = {}) {
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error('MAPBOX_TOKEN env variable is not set');
+
+  const db = getDb();
+
+  const { data: pending, error } = await db
+    .from('venues')
+    .select('id, name, latitude, longitude, address_line, city, postal_code')
+    .not('location', 'is', null)
+    .or('address_line.is.null,city.is.null,postal_code.is.null');
+  if (error) throw new Error(`fetching address-pending venues failed: ${error.message}`);
+
+  const summary = { resolved: 0, failed: 0 };
+
+  for (let i = 0; i < pending.length; i++) {
+    const venue = pending[i];
+    try {
+      const result = await reverseGeocodeAddressDetails(venue.longitude, venue.latitude, token);
+      if (result) {
+        const patch = {};
+        if (!venue.address_line && result.addressLine) patch.address_line = result.addressLine;
+        if (!venue.city && result.city) patch.city = result.city;
+        if (!venue.postal_code && result.postalCode) patch.postal_code = result.postalCode;
+
+        if (Object.keys(patch).length) {
+          const { error: updateError } = await db.from('venues').update(patch).eq('id', venue.id);
+          if (updateError) throw new Error(updateError.message);
+          console.log(`[geocode] ✓ address details for venue ${venue.id} "${venue.name}" → ${JSON.stringify(patch)}`);
+        }
+        summary.resolved++;
+      } else {
+        console.warn(`[geocode] no address details found for venue ${venue.id} "${venue.name}"`);
+        summary.failed++;
+      }
+    } catch (err) {
+      console.error(`[geocode] ✗ address backfill for venue ${venue.id}: ${err.message}`);
+      summary.failed++;
+    }
+
+    if (delayMs > 0 && i < pending.length - 1) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+
+  if (pending.length === 0) console.log('[geocode] No venues need address-detail backfill.');
+
+  return summary;
+}
+
+/**
  * Geocode a single venue by ID (useful for targeted re-geocoding).
  */
 export async function geocodeVenueById(venueId) {

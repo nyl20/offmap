@@ -9,7 +9,12 @@ async function fetchAllRows(db, table, select) {
   const rows = [];
   let from = 0;
   while (true) {
-    const { data, error } = await db.from(table).select(select).range(from, from + PAGE_SIZE - 1);
+    // .order('id') is required for correctness — without an explicit stable
+    // sort, PostgREST doesn't guarantee row order is consistent across
+    // separate .range() calls, so pagination can silently skip/repeat rows
+    // once the table exceeds PAGE_SIZE (found in production in the very
+    // similar pagination loop in db/purge-service-trade-venues.js).
+    const { data, error } = await db.from(table).select(select).order('id', { ascending: true }).range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(`fetching ${table} failed: ${error.message}`);
     rows.push(...data);
     if (data.length < PAGE_SIZE) break;

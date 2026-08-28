@@ -1,0 +1,50 @@
+.row {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 4px 0 22px;
+}
+
+.chip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 68px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-elevated);
+  border: 1.5px solid var(--color-border);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.circleActive {
+  border-color: var(--color-mint);
+  box-shadow: 0 0 0 3px var(--color-mint-soft);
+  color: var(--color-mint);
+}
+
+.label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.labelActive {
+  color: var(--color-text);
+}

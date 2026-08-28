@@ -1,0 +1,42 @@
+.rowSection {
+  padding: 28px 0;
+}
+
+.rowHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.rowTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.rowSubtitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+
+.rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 180px;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+
+.rail > * {
+  scroll-snap-align: start;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px 18px;
+}
