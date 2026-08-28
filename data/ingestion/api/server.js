@@ -6,7 +6,7 @@ import { getDb } from '../db/supabase.js';
 import { NYC } from '../db/funnel.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PUBLIC = join(__dirname, '../../public');
+const PUBLIC = join(__dirname, '../public');
 
 const EVENT_COLUMNS = `
   id, external_id, duplicate_group_id,

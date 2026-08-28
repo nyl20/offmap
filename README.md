@@ -1,6 +1,6 @@
 # OFFMAP
 
-OFFMAP is organized as a monorepo so the mobile app, future web app, shared
+OFFMAP is organized as a monorepo so the mobile app, web app, shared
 TypeScript code, ingestion jobs, and Supabase project files can evolve together.
 
 ## Layout
@@ -8,18 +8,17 @@ TypeScript code, ingestion jobs, and Supabase project files can evolve together.
 ```txt
 apps/
   mobile/          Expo app
-  web/             Future Next.js web app
+  web/             Next.js web app
 
 packages/
   shared/          Shared TypeScript types, constants, and pure utilities
-  db/              Generated Supabase types and shared database helpers
+  db/              Shared database types and Supabase query helpers
 
 data/
-  ingestion/       Python scraping/API ingestion scripts
+  ingestion/       Node.js scraping/API ingestion pipeline
 
 supabase/
   migrations/      Supabase SQL migrations
-  functions/       Supabase Edge Functions
   seed.sql         Local seed data
 ```
 
@@ -40,7 +39,12 @@ npm run start
 
 ## Web
 
-`apps/web` is currently a placeholder for the future Next.js app.
+Run the Next.js app from `apps/web`:
+
+```bash
+cd apps/web
+npm run dev
+```
 
 ## Data
 

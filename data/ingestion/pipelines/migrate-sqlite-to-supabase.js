@@ -9,8 +9,8 @@
 // already seen.
 import 'dotenv/config';
 import { DatabaseSync } from 'node:sqlite';
-import { getDb } from '../src/db/supabase.js';
-import { upsertVenue, insertEvent, recomputeCanDisplay, recomputeDuplicateGroups } from '../src/db/funnel.js';
+import { getDb } from '../db/supabase.js';
+import { upsertVenue, insertEvent, recomputeCanDisplay, recomputeDuplicateGroups } from '../db/funnel.js';
 
 const dbPath = process.env.DB_PATH ?? './data/events.db';
 const sqlite = new DatabaseSync(dbPath);

@@ -6,3 +6,4 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 data/instagram_state.json
+logs/*.log
