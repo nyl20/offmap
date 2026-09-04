@@ -15,9 +15,9 @@ import type { EventCategory, OffmapEvent } from '@/types/event';
 
 type StoryCategory = {
   accent: string;
+  emoji: string;
   events: OffmapEvent[];
   label: string;
-  mark: string;
 };
 
 type EventSection = {
@@ -28,10 +28,10 @@ type EventSection = {
 };
 
 const homeCategorySections: Omit<EventSection, 'events'>[] = [
-  { title: 'Music', accent: Palette.powderBlue, categoryLabels: ['Music'] },
-  { title: 'Crafts', accent: Palette.coolSteel, categoryLabels: ['Crafts', 'Art', 'Market'] },
-  { title: 'Food & Drink', accent: Palette.coral, categoryLabels: ['Food', 'Drink'] },
-  { title: 'Wellness', accent: Palette.sunflowerGold, categoryLabels: ['Wellness'] },
+  { title: 'Music', accent: Palette.homeAccentBlue, categoryLabels: ['Music'] },
+  { title: 'Crafts', accent: Palette.homeAccentBlue, categoryLabels: ['Crafts', 'Art', 'Market'] },
+  { title: 'Food & Drink', accent: Palette.homeAccentBlue, categoryLabels: ['Food', 'Drink'] },
+  { title: 'Wellness', accent: Palette.homeAccentBlue, categoryLabels: ['Wellness'] },
 ];
 
 export default function FeaturedScreen() {
@@ -41,6 +41,7 @@ export default function FeaturedScreen() {
   });
   const [activeStory, setActiveStory] = useState<StoryCategory | null>(null);
   const [storyIndex, setStoryIndex] = useState(0);
+  const [viewedStories, setViewedStories] = useState<Set<string>>(() => new Set());
   const homeEvents = fetchedEvents.length > 0 ? fetchedEvents : mockEvents;
   const usingFallbackEvents = fetchedEvents.length === 0;
   const eventSections = useMemo(() => buildHomeSections(homeEvents), [homeEvents]);
@@ -62,13 +63,20 @@ export default function FeaturedScreen() {
     setStoryIndex(0);
   };
 
+  const completeStory = () => {
+    if (activeStory) {
+      setViewedStories((current) => new Set(current).add(activeStory.label));
+    }
+    closeStory();
+  };
+
   const showNextStory = () => {
     if (!activeStory) {
       return;
     }
     const events = activeStory.events.length > 0 ? activeStory.events : mockEvents.slice(0, 3);
     if (storyIndex >= events.length - 1) {
-      closeStory();
+      completeStory();
       return;
     }
     setStoryIndex((index) => index + 1);
@@ -106,7 +114,12 @@ export default function FeaturedScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}>
           {storyCategories.map((category) => (
-            <StoryBubble category={category} key={category.label} onPress={() => openStory(category)} />
+            <StoryBubble
+              category={category}
+              key={category.label}
+              onPress={() => openStory(category)}
+              viewed={viewedStories.has(category.label)}
+            />
           ))}
         </ScrollView>
 
@@ -171,28 +184,28 @@ function IconButton({
 
 function MapMarkerPlusIcon() {
   return (
-    <View style={styles.markerIcon}>
-      <View style={styles.markerPin}>
-        <View style={styles.markerPinHole} />
-      </View>
-      <View style={styles.markerPlusVertical} />
-      <View style={styles.markerPlusHorizontal} />
-    </View>
+    <SymbolView
+      name={{ ios: 'mappin.and.ellipse'}}
+      size={20}
+      tintColor={Palette.deepNavy}
+    />
   );
 }
 
 function StoryBubble({
   category,
   onPress,
+  viewed,
 }: {
   category: StoryCategory;
   onPress: () => void;
+  viewed: boolean;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.storyItem}>
-      <View style={[styles.storyRing, { borderColor: category.accent }]}>
+      <View style={[styles.storyRing, viewed && styles.storyRingViewed]}>
         <View style={styles.storyInner}>
-          <ThemedText style={styles.storyMark}>{category.mark}</ThemedText>
+          <ThemedText style={styles.storyMark}>{category.emoji}</ThemedText>
         </View>
       </View>
       <ThemedText numberOfLines={1} style={styles.storyLabel}>
@@ -235,8 +248,8 @@ function StoryViewer({
               ))}
             </View>
             <View style={styles.storyViewerHeader}>
-              <View style={[styles.storyMiniRing, { borderColor: category.accent }]}>
-                <ThemedText style={styles.storyMiniMark}>{category.mark}</ThemedText>
+              <View style={styles.storyMiniRing}>
+                <ThemedText style={styles.storyMiniMark}>{category.emoji}</ThemedText>
               </View>
               <View style={styles.storyHeaderCopy}>
                 <ThemedText style={styles.storyViewerLabel}>{category.label}</ThemedText>
@@ -310,27 +323,12 @@ function EventTile({
   return (
     <Link href={`/event/${event.id}`} asChild>
       <Pressable style={styles.eventTile}>
-        <EventArtwork accent={accent} event={event} />
-        <View style={styles.eventBadge}>
-          <ThemedText numberOfLines={1} style={styles.eventBadgeText}>
-            {event.price === 'Free' ? 'FREE' : event.sourceName ?? 'EVENT'}
-          </ThemedText>
+        <View style={styles.tileArtwork}>
+          <EventArtwork accent={accent} event={event} />
         </View>
-        <View style={styles.heartButton}>
-          <SymbolView name={{ ios: 'heart', web: 'favorite_border' }} size={15} tintColor={Palette.paper} />
-        </View>
-        <View style={styles.tileScrim} />
-        <ThemedText numberOfLines={1} style={styles.tileTitle}>
+        <ThemedText numberOfLines={2} style={styles.tileTitle}>
           {event.title}
         </ThemedText>
-        <View style={styles.tileMeta}>
-          <ThemedText numberOfLines={1} style={styles.tileVenue}>
-            {event.venueName}
-          </ThemedText>
-          <ThemedText numberOfLines={1} style={styles.tilePrice}>
-            {event.price ?? 'Details soon'}
-          </ThemedText>
-        </View>
       </Pressable>
     </Link>
   );
@@ -401,17 +399,33 @@ function buildStoryCategories(sections: EventSection[]): StoryCategory[] {
   return [
     {
       label: 'For You',
-      mark: '*',
-      accent: Palette.sunflowerGold,
+      emoji: '✨',
+      accent: Palette.homeAccentBlue,
       events: sections.flatMap((section) => section.events).slice(0, 4),
     },
     ...sections.map((section) => ({
       label: section.title,
-      mark: section.title.slice(0, 2),
-      accent: section.accent,
+      emoji: getStoryEmoji(section.title),
+      accent: Palette.homeAccentBlue,
       events: section.events.slice(0, 4),
     })),
   ];
+}
+
+function getStoryEmoji(title: string) {
+  if (title.includes('Music')) {
+    return '🎵';
+  }
+  if (title.includes('Craft')) {
+    return '🎨';
+  }
+  if (title.includes('Food')) {
+    return '🍜';
+  }
+  if (title.includes('Wellness')) {
+    return '🧘';
+  }
+  return '📍';
 }
 
 function eventMatchesAnyCategory(event: OffmapEvent, labels: string[]) {
@@ -489,7 +503,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   logoDot: {
-    color: Palette.sunflowerGold,
+    color: Palette.homeAccentBlue,
   },
   location: {
     color: Palette.powderBlue,
@@ -509,50 +523,9 @@ const styles = StyleSheet.create({
     width: 40,
   },
   iconButtonFilled: {
-    backgroundColor: Palette.sunflowerGold,
+    backgroundColor: Palette.homeAccentBlue,
   },
-  markerIcon: {
-    height: 23,
-    position: 'relative',
-    width: 24,
-  },
-  markerPin: {
-    alignItems: 'center',
-    borderColor: Palette.deepNavy,
-    borderRadius: 9,
-    borderWidth: 2,
-    height: 18,
-    justifyContent: 'center',
-    left: 1,
-    position: 'absolute',
-    top: 0,
-    transform: [{ rotate: '45deg' }],
-    width: 18,
-  },
-  markerPinHole: {
-    backgroundColor: Palette.deepNavy,
-    borderRadius: 3,
-    height: 5,
-    width: 5,
-  },
-  markerPlusHorizontal: {
-    backgroundColor: Palette.deepNavy,
-    borderRadius: 1,
-    height: 3,
-    position: 'absolute',
-    right: 0,
-    top: 7,
-    width: 10,
-  },
-  markerPlusVertical: {
-    backgroundColor: Palette.paper,
-    borderRadius: 1,
-    height: 10,
-    position: 'absolute',
-    right: 3.5,
-    top: 3.5,
-    width: 3,
-  },
+
   storyRail: {
     gap: 14,
     paddingHorizontal: 16,
@@ -564,23 +537,33 @@ const styles = StyleSheet.create({
   },
   storyRing: {
     alignItems: 'center',
+    backgroundColor: Palette.homeAccentBlue,
+    borderColor: 'rgba(238, 244, 237, 0.74)',
     borderRadius: 31,
-    borderWidth: 2.5,
-    height: 62,
+    borderWidth: 1,
+    height: 60,
     justifyContent: 'center',
-    width: 62,
+    shadowColor: Palette.homeAccentBlue,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    width: 60,
+  },
+  storyRingViewed: {
+    backgroundColor: 'rgba(141, 169, 196, 0.24)',
+    borderColor: 'rgba(141, 169, 196, 0.34)',
+    shadowOpacity: 0,
   },
   storyInner: {
     alignItems: 'center',
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.deepNavy,
     borderRadius: 25,
-    height: 50,
+    height: 53,
     justifyContent: 'center',
-    width: 50,
+    width: 53,
   },
   storyMark: {
-    color: Palette.deepNavy,
-    fontSize: 13,
+    fontSize: 23,
     fontWeight: '700',
   },
   storyLabel: {
@@ -620,17 +603,22 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   seeAll: {
-    color: Palette.sunflowerGold,
+    color: Palette.homeAccentBlue,
     fontSize: 12,
     fontWeight: '700',
   },
   eventRail: {
-    gap: 10,
+    gap: 14,
     paddingHorizontal: 16,
   },
   eventTile: {
-    borderRadius: 5,
-    height: 156,
+    gap: 7,
+    width: 148,
+  },
+  tileArtwork: {
+    aspectRatio: 1,
+    backgroundColor: Palette.glassStrong,
+    borderRadius: 6,
     overflow: 'hidden',
     width: 148,
   },
@@ -711,65 +699,11 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '12deg' }],
     width: 68,
   },
-  eventBadge: {
-    backgroundColor: Palette.shadowNavy,
-    borderRadius: 999,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    position: 'absolute',
-    top: 8,
-  },
-  eventBadgeText: {
-    color: Palette.mintCream,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  heartButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(6, 26, 50, 0.45)',
-    borderRadius: 13,
-    height: 26,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 8,
-    top: 8,
-    width: 26,
-  },
-  tileScrim: {
-    backgroundColor: 'rgba(6, 26, 50, 0.6)',
-    bottom: 0,
-    height: 76,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
   tileTitle: {
-    bottom: 39,
     color: Palette.mintCream,
-    fontSize: 14,
-    fontWeight: '800',
-    left: 10,
-    lineHeight: 16,
-    position: 'absolute',
-    right: 10,
-  },
-  tileMeta: {
-    bottom: 11,
-    gap: 0,
-    left: 10,
-    position: 'absolute',
-    right: 10,
-  },
-  tileVenue: {
-    color: Palette.mintCream,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tilePrice: {
-    color: Palette.sunflowerGold,
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 15,
   },
   feedSection: {
     gap: 9,
@@ -855,7 +789,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   textPostLabel: {
-    color: Palette.sunflowerGold,
+    color: Palette.homeAccentBlue,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -892,7 +826,7 @@ const styles = StyleSheet.create({
     height: 3,
   },
   storyProgressTrackActive: {
-    backgroundColor: Palette.paper,
+    backgroundColor: Palette.homeAccentBlue,
   },
   storyViewerHeader: {
     alignItems: 'center',
@@ -902,6 +836,8 @@ const styles = StyleSheet.create({
   },
   storyMiniRing: {
     alignItems: 'center',
+    backgroundColor: Palette.homeAccentBlue,
+    borderColor: 'rgba(238, 244, 237, 0.72)',
     borderRadius: 18,
     borderWidth: 2,
     height: 36,
@@ -909,8 +845,7 @@ const styles = StyleSheet.create({
     width: 36,
   },
   storyMiniMark: {
-    color: Palette.mintCream,
-    fontSize: 11,
+    fontSize: 17,
     fontWeight: '800',
   },
   storyHeaderCopy: {
@@ -954,7 +889,7 @@ const styles = StyleSheet.create({
   },
   storyPosterTag: {
     alignSelf: 'flex-start',
-    backgroundColor: Palette.sunflowerGold,
+    backgroundColor: Palette.homeAccentBlue,
     borderRadius: 999,
     color: Palette.deepNavy,
     fontSize: 12,

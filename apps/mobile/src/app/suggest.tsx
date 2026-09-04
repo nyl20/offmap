@@ -12,14 +12,14 @@ const categoryOptions = ['Music', 'Food', 'Art', 'Market', 'Pop-up', 'Other'];
 export default function SuggestEventScreen() {
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: 'Suggest an event' }} />
+      <Stack.Screen options={{ title: 'Share an event' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <SafeAreaView edges={['top']} style={styles.hero}>
           <View style={styles.heroIcon}>
             <MapMarkerPlusIcon />
           </View>
           <View style={styles.heroCopy}>
-            <ThemedText style={styles.title}>Put something on the map</ThemedText>
+            <ThemedText style={styles.title}>Know about an event? Put it on the map!</ThemedText>
             <ThemedText style={styles.subtitle}>
               Share a lead, flyer, link, or rumor so someone nearby can check it out.
             </ThemedText>
@@ -27,8 +27,8 @@ export default function SuggestEventScreen() {
         </SafeAreaView>
 
         <View style={styles.form}>
-          <Field label="Event name" placeholder="Jazz night behind the bookstore" />
-          <Field label="Official website or post" placeholder="https://..." keyboardType="url" />
+          <Field label="Event name*" placeholder="Jazz night behind the bookstore" />
+          <Field label="Official website or post*" placeholder="https://..." keyboardType="url" />
           <Field label="Where did you hear about it?" placeholder="Flyer, friend, group chat, venue board..." />
           <Field label="Location" placeholder="Venue name, address, or cross streets" />
           <View style={styles.field}>
@@ -99,13 +99,11 @@ function Field({
 
 function MapMarkerPlusIcon() {
   return (
-    <View style={styles.markerIcon}>
-      <View style={styles.markerPin}>
-        <View style={styles.markerPinHole} />
-      </View>
-      <View style={styles.markerPlusVertical} />
-      <View style={styles.markerPlusHorizontal} />
-    </View>
+    <SymbolView
+      name={{ ios: 'mappin.and.ellipse' }}
+      size={32}
+      tintColor={Palette.deepNavy}
+    />
   );
 }
 
@@ -123,7 +121,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
     paddingHorizontal: 18,
-    paddingTop: 12,
+    paddingTop: 0,
   },
   heroIcon: {
     alignItems: 'center',
@@ -222,46 +220,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
-  markerIcon: {
-    height: 25,
-    position: 'relative',
-    width: 26,
-  },
-  markerPin: {
-    alignItems: 'center',
-    borderColor: Palette.deepNavy,
-    borderRadius: 10,
-    borderWidth: 2,
-    height: 19,
-    justifyContent: 'center',
-    left: 1,
-    position: 'absolute',
-    top: 0,
-    transform: [{ rotate: '45deg' }],
-    width: 19,
-  },
-  markerPinHole: {
-    backgroundColor: Palette.deepNavy,
-    borderRadius: 3,
-    height: 5,
-    width: 5,
-  },
-  markerPlusHorizontal: {
-    backgroundColor: Palette.deepNavy,
-    borderRadius: 1,
-    height: 3,
-    position: 'absolute',
-    right: 0,
-    top: 8,
-    width: 11,
-  },
-  markerPlusVertical: {
-    backgroundColor: Palette.deepNavy,
-    borderRadius: 1,
-    height: 11,
-    position: 'absolute',
-    right: 4,
-    top: 4,
-    width: 3,
-  },
+
 });

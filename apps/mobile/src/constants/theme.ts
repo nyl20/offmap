@@ -28,6 +28,7 @@ export const Colors = {
 export const Palette = {
   deepNavy: '#273043',
   powderBlue: '#8DA9C4',
+  homeAccentBlue: '#B1EDE8',
   mintCream: '#EEF4ED',
   electricAmber: '#F6AE2D',
   coral: '#FF6B4A',

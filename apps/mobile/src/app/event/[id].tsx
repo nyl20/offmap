@@ -62,7 +62,7 @@ export default function EventDetailScreen() {
         <View style={styles.content}>
           <View style={styles.factsGrid}>
             <Fact icon={{ ios: 'calendar', web: 'calendar_month' }} label="Date" value={eventDate} />
-            <Fact icon={{ ios: 'clock', web: 'schedule' }} label="Time" value={eventTime} />
+            <Fact icon={{ ios: 'clock', web: 'schedule' }} label="Hours" value={eventTime} />
             <Fact
               icon={{ ios: 'ticket', web: 'confirmation_number' }}
               label="Cost"
@@ -167,10 +167,14 @@ function Fact({
       <View style={styles.factIcon}>
         <SymbolView name={icon} size={17} tintColor={Palette.paper} />
       </View>
-      <ThemedText style={styles.factLabel}>{label}</ThemedText>
+      <View>
+        <ThemedText style={styles.factLabel}>{label}</ThemedText>
       <ThemedText numberOfLines={2} style={styles.factValue}>
         {value}
       </ThemedText>
+
+      </View>
+      
     </View>
   );
 }
@@ -325,13 +329,14 @@ const styles = StyleSheet.create({
   },
   factCard: {
     width: '48%',
-    minHeight: 116,
+    minHeight: 86,
     gap: 8,
     padding: 14,
     borderRadius: 10,
     backgroundColor: Palette.glassStrong,
     borderColor: Palette.bone,
     borderWidth: 2,
+    flexDirection: 'row'
   },
   factIcon: {
     alignItems: 'center',

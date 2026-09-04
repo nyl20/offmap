@@ -22,10 +22,11 @@ export default function AppTabs() {
         name="index"
         options={{
           title: 'Featured',
+          tabBarShowLabel: false,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
-              name={{ ios: 'sparkles', android: 'star', web: 'star' }}
+              name={{ ios: 'house', android: 'star', web: 'star' }}
               size={size}
             />
           ),
@@ -36,6 +37,7 @@ export default function AppTabs() {
         name="discover"
         options={{
           title: 'Discover',
+          tabBarShowLabel: false,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
@@ -50,6 +52,7 @@ export default function AppTabs() {
         name="saved"
         options={{
           title: 'Saved',
+          tabBarShowLabel: false,
           headerShown: true,
           headerTitle: '',
           headerShadowVisible: false,
