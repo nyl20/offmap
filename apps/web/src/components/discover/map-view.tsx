@@ -41,6 +41,19 @@ const CLOSE_GRACE_MS = 180;
 
 type VenueProperties = { id: number; name: string };
 
+// Mapbox paint properties are canvas-rendered, not CSS — they can't read
+// --icon-line, so the theme's colors are duplicated here and kept in sync
+// by watching data-theme directly (see the MutationObserver below), same
+// source of truth, different mechanism.
+function getMapPaintColors() {
+  const isLight = document.documentElement.dataset.theme === 'light';
+  return {
+    clusterColor: isLight ? '#97acc8' : '#9AA8E8',
+    clusterTextColor: isLight ? '#10261f' : '#1A2036',
+    pinColor: isLight ? '#437742' : '#8DE9D5',
+  };
+}
+
 function toFeatureCollection(venues: VenueRow[]): FeatureCollection<Point, VenueProperties> {
   return {
     type: 'FeatureCollection',
@@ -184,6 +197,8 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
     });
 
     map.on('load', () => {
+      const mapColors = getMapPaintColors();
+
       map.addSource(SOURCE_ID, {
         type: 'geojson',
         data: toFeatureCollection(venuesRef.current),
@@ -201,7 +216,7 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
         source: SOURCE_ID,
         filter: ['has', 'point_count'],
         paint: {
-          'circle-color': '#9AA8E8',
+          'circle-color': mapColors.clusterColor,
           'circle-radius': ['step', ['get', 'point_count'], 16, 10, 21, 30, 27],
           'circle-stroke-width': 3,
           'circle-stroke-color': '#ffffff',
@@ -217,7 +232,7 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
           'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
           'text-size': 12,
         },
-        paint: { 'text-color': '#1A2036' },
+        paint: { 'text-color': mapColors.clusterTextColor },
       });
       // A soft grounding shadow beneath each point, for a touch of lift
       // without adding visual weight — rendered first so the point layer
@@ -235,8 +250,8 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
           'circle-translate': [0, 1.5],
         },
       });
-      // Minimalist marker — a small translucent mint sphere with a crisp
-      // white outline, matching the same white-stroke language the cluster
+      // Minimalist marker — a small translucent sphere with a crisp white
+      // outline, matching the same white-stroke language the cluster
       // bubbles already use. Deliberately small so dense areas don't feel
       // cluttered with dozens of pins.
       map.addLayer({
@@ -245,7 +260,7 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
         source: SOURCE_ID,
         filter: ['!', ['has', 'point_count']],
         paint: {
-          'circle-color': '#8DE9D5',
+          'circle-color': mapColors.pinColor,
           'circle-opacity': 0.9,
           'circle-radius': 5,
           'circle-stroke-width': 1.5,
@@ -335,8 +350,21 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
     const initial = map.getCenter();
     onMoveEnd({ lat: initial.lat, lng: initial.lng });
 
+    // The pull chain toggles theme by mutating data-theme directly (no
+    // React state/context involved), so this is the only way for the map's
+    // canvas-rendered paint properties to find out it changed.
+    const themeObserver = new MutationObserver(() => {
+      if (!loadedRef.current) return;
+      const colors = getMapPaintColors();
+      map.setPaintProperty('clusters', 'circle-color', colors.clusterColor);
+      map.setPaintProperty('cluster-count', 'text-color', colors.clusterTextColor);
+      map.setPaintProperty('unclustered-point', 'circle-color', colors.pinColor);
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
     return () => {
       loadedRef.current = false;
+      themeObserver.disconnect();
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       map.remove();

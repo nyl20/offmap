@@ -12,7 +12,7 @@
 
 .bar svg {
   flex: none;
-  color: var(--color-text-tertiary);
+  color: var(--icon-line, var(--color-text-tertiary));
 }
 
 .input {

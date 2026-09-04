@@ -109,6 +109,12 @@
   cursor: pointer;
 }
 
+/* Contrast exception: this sits on a dark circle over a photo, so it must
+   stay white rather than the light-mode --icon-line default. */
+.iconBtn svg {
+  color: inherit;
+}
+
 .iconBtn:focus-visible {
   outline: 2px solid var(--color-mint);
   outline-offset: 2px;

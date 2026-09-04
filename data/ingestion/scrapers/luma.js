@@ -13,7 +13,20 @@ function inNYC(lat, lng) {
   return lat >= NYC.minLat && lat <= NYC.maxLat && lng >= NYC.minLng && lng <= NYC.maxLng;
 }
 
-function normalizeEvent(e) {
+function formatPrice(ticketInfo) {
+  if (!ticketInfo || ticketInfo.is_free) return null;
+  const cents = ticketInfo.price?.cents;
+  const currency = ticketInfo.price?.currency;
+  if (cents == null || !currency) return null;
+  const amount = (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+  return currency.toUpperCase() === 'USD' ? `$${amount}` : `${amount} ${currency.toUpperCase()}`;
+}
+
+// `entry` is the sibling structure the /nyc feed returns per item: { event,
+// ticket_info, hosts, tags, ... } — ticket_info/hosts sit alongside event,
+// not inside it.
+function normalizeEvent(entry) {
+  const e = entry?.event ?? entry;
   if (!e?.name || !e?.start_at) return null;
 
   const start  = new Date(e.start_at);
@@ -34,6 +47,9 @@ function normalizeEvent(e) {
     ? (e.url.startsWith('http') ? e.url : `${BASE}/${e.url}`)
     : `${BASE}/${e.api_id}`;
 
+  const ticketInfo = entry?.ticket_info ?? null;
+  const host = entry?.hosts?.[0] ?? null;
+
   return {
     title:         e.name,
     external_id:   e.api_id ?? null,
@@ -48,11 +64,15 @@ function normalizeEvent(e) {
     end_time:      end ? end.toISOString() : null,
     timezone:      e.timezone ?? 'America/New_York',
     category:      null,
-    tags:          [],
-    description:   null,
-    price_text:    null,
-    is_free:       'false',
+    tags:          entry?.tags ?? [],
+    description:   host?.bio_short ?? null,
+    organizer_name: host?.name ?? null,
+    price_text:    formatPrice(ticketInfo),
+    is_free:       ticketInfo?.is_free ?? false,
     image_url:     e.cover_url ?? null,
+    venue_website_url: host?.website ?? null,
+    venue_image_url:   host?.avatar_url ?? null,
+    venue_description: host?.bio_short ?? null,
     source_url:    sourceUrl,
     source_name:   'Luma',
     confidence_score: 0.8,
@@ -82,5 +102,5 @@ export async function fetchEvents() {
     console.warn('[luma] 0 events in __NEXT_DATA__ — page may have geo-defaulted away from NYC');
   }
 
-  return events.map(entry => normalizeEvent(entry.event ?? entry)).filter(Boolean);
+  return events.map(entry => normalizeEvent(entry)).filter(Boolean);
 }

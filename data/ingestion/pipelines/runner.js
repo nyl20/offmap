@@ -22,8 +22,18 @@ import * as brooklynmuseum  from '../scrapers/brooklynmuseum.js';
 import * as met             from '../scrapers/met.js';
 import * as museums         from '../scrapers/museums.js';
 import * as localSpots      from '../scrapers/local-spots.js';
-import * as instagram        from '../scrapers/instagram.js';
+import * as genericurl        from '../scrapers/genericurl/index.js';
 
+// instagram — paused, deliberately NOT imported here (previously an
+// unconditional `import * as instagram from '../scrapers/instagram.js'`
+// stayed in this file even while unregistered below, and its transitive
+// top-level code path — Groq client construction in
+// scrapers/instagram/parseEvent.js — crashed this entire pipeline before
+// GROQ_API_KEY was set, taking recomputeVenueCanDisplay and every other
+// tail stage down with it; see logs/scrape.log 2026-08-29). Code is intact
+// and functional (Apify fetch → Groq structured extraction on captions); to
+// resume, add back `import * as instagram from '../scrapers/instagram.js';`
+// above AND `instagram` to the array below, and set GROQ_API_KEY in .env.
 const SCRAPERS = [
   reddit, bbg, moma, timeout,
   theskint, untappedcities, luma, partiful,
@@ -31,7 +41,7 @@ const SCRAPERS = [
   donyc, nycparks, residentadvisor, nycopendata,
   brooklynmuseum, met, museums,
   localSpots,
-  instagram,
+  genericurl,
 ];
 
 async function logScrapeRunStart(db, sourceName) {
@@ -49,6 +59,22 @@ async function logScrapeRunFinish(db, runId, { inserted, skipped, errorCount, er
     error_message: errorMessage ?? null,
   }).eq('id', runId);
   if (error) throw new Error(`logScrapeRunFinish failed: ${error.message}`);
+}
+
+// Isolates one post-scrape maintenance stage so a failure in it (network
+// blip, statement timeout — merge_cross_name_duplicate_venues has already
+// timed out in production) can't abort the stages after it. Before this,
+// the whole tail of runScrapers ran with no error isolation at all, so any
+// one stage failing meant recomputeVenueCanDisplay — the function that
+// actually enforces the junk-venue display gate — silently never ran; see
+// logs/scrape.log for a 10-day streak of runs that never reached it.
+async function runStage(label, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[runner] stage "${label}" failed: ${err.message}`);
+    return null;
+  }
 }
 
 export async function runScrapers({ skipGeocode = false, only = null } = {}) {
@@ -217,39 +243,55 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
   const webResult = await enrichVenuesFromWebsite(db);
   console.log(`[enrich] ${webResult.enriched} enriched, ${webResult.skipped} skipped`);
 
+  // Every stage below is wrapped with runStage: none of these are allowed
+  // to abort the ones after it. Previously this whole tail ran unguarded,
+  // so one stage timing out or hitting a network error (both have happened
+  // in production — see runStage's doc comment) silently skipped
+  // recomputeVenueCanDisplay entirely, which is the one function that
+  // actually enforces the junk-venue display gate.
   console.log('\n[runner] recomputing venue completeness scores…');
-  await recomputeVenueCompletenessScores(db);
+  await runStage('recomputeVenueCompletenessScores', () => recomputeVenueCompletenessScores(db));
+
+  // Run the display-gate recompute here too, BEFORE the merge/dedup block —
+  // not just after. is_source_suspect (unlike the old category-shape check
+  // it replaces) isn't defeated by the category-array unions merges
+  // perform, so it's safe to apply early; this guarantees at least one
+  // successful application of the gate even if mergeCrossNameDuplicateVenues
+  // times out below, which has happened in production.
+  console.log('[runner] recomputing venue can_display (pre-merge)…');
+  const preMergeDisplayCount = await runStage('recomputeVenueCanDisplay (pre-merge)', () => recomputeVenueCanDisplay(db));
+  if (preMergeDisplayCount != null) console.log(`[runner] can_display refreshed for ${preMergeDisplayCount} venues`);
 
   console.log('[runner] merging duplicate venues…');
-  const venueMerge = await mergeDuplicateVenues(db);
-  console.log(`[runner] merged ${venueMerge.mergedCount} venues across ${venueMerge.groupCount} duplicate groups`);
+  const venueMerge = await runStage('mergeDuplicateVenues', () => mergeDuplicateVenues(db));
+  if (venueMerge) console.log(`[runner] merged ${venueMerge.mergedCount} venues across ${venueMerge.groupCount} duplicate groups`);
 
   console.log('[runner] merging cross-name duplicate venues…');
-  const crossMerge = await mergeCrossNameDuplicateVenues(db);
-  console.log(`[runner] merged ${crossMerge.mergedCount} cross-name duplicates`);
+  const crossMerge = await runStage('mergeCrossNameDuplicateVenues', () => mergeCrossNameDuplicateVenues(db));
+  if (crossMerge) console.log(`[runner] merged ${crossMerge.mergedCount} cross-name duplicates`);
 
   console.log('[runner] queuing low-confidence duplicate candidates…');
-  const queuedCount = await queueLowConfidenceVenueDuplicates(db);
-  console.log(`[runner] ${queuedCount} new candidate pair(s) queued for review`);
+  const queuedCount = await runStage('queueLowConfidenceVenueDuplicates', () => queueLowConfidenceVenueDuplicates(db));
+  if (queuedCount != null) console.log(`[runner] ${queuedCount} new candidate pair(s) queued for review`);
 
   console.log('[runner] recomputing venue completeness scores (post-merge)…');
-  await recomputeVenueCompletenessScores(db);
+  await runStage('recomputeVenueCompletenessScores (post-merge)', () => recomputeVenueCompletenessScores(db));
 
-  console.log('[runner] recomputing venue can_display…');
-  const venueDisplayCount = await recomputeVenueCanDisplay(db);
-  console.log(`[runner] can_display refreshed for ${venueDisplayCount} venues`);
+  console.log('[runner] recomputing venue can_display (post-merge)…');
+  const venueDisplayCount = await runStage('recomputeVenueCanDisplay (post-merge)', () => recomputeVenueCanDisplay(db));
+  if (venueDisplayCount != null) console.log(`[runner] can_display refreshed for ${venueDisplayCount} venues`);
 
   console.log('\n[runner] recomputing can_display…');
-  const displayCount = await recomputeCanDisplay(db);
-  console.log(`[runner] can_display refreshed for ${displayCount} events`);
+  const displayCount = await runStage('recomputeCanDisplay', () => recomputeCanDisplay(db));
+  if (displayCount != null) console.log(`[runner] can_display refreshed for ${displayCount} events`);
 
   console.log('[runner] recomputing duplicate groups…');
-  const dupes = await recomputeDuplicateGroups(db);
-  console.log(`[runner] ${dupes.groupCount} duplicate groups (${dupes.eventCount} events) found`);
+  const dupes = await runStage('recomputeDuplicateGroups', () => recomputeDuplicateGroups(db));
+  if (dupes) console.log(`[runner] ${dupes.groupCount} duplicate groups (${dupes.eventCount} events) found`);
 
   console.log('[runner] recomputing completeness scores…');
-  const scoredCount = await recomputeCompletenessScores(db);
-  console.log(`[runner] completeness_score refreshed for ${scoredCount} events`);
+  const scoredCount = await runStage('recomputeCompletenessScores', () => recomputeCompletenessScores(db));
+  if (scoredCount != null) console.log(`[runner] completeness_score refreshed for ${scoredCount} events`);
 
   return totals;
 }

@@ -29,7 +29,7 @@
 .venueRow svg {
   flex: none;
   margin-top: 2px;
-  color: var(--color-text-tertiary);
+  color: var(--icon-line, var(--color-text-tertiary));
 }
 
 .factGrid {

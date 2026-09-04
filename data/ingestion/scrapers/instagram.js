@@ -1,4 +1,7 @@
-import { extractMedia } from './instagram/extractMedia.js';
+// PAUSED — not registered in pipelines/runner.js's SCRAPERS array, so this
+// doesn't run under `npm run scrape` or `npm run scrape:instagram`. The code
+// itself is functional (Apify fetch → Groq structured extraction on
+// captions); see README.md for status and how to resume.
 import { parseEvents } from './instagram/parseEvent.js';
 import { fetchApifyPosts } from './instagram/fetchApify.js';
 
@@ -15,13 +18,10 @@ export async function fetchEvents() {
 
   for (const post of posts) {
     try {
-      const extractedText = await extractMedia(post.media_paths ?? []);
-
       const parsedEvents = await parseEvents({
-        caption:            post.caption,
-        extractedMediaText: extractedText,
-        postTimestamp:      post.timestamp,
-        username:           post.username,
+        caption:       post.caption,
+        postTimestamp: post.timestamp,
+        username:      post.username,
       });
 
       // Use first non-video CDN URL as the event image (Instagram CDN URLs expire

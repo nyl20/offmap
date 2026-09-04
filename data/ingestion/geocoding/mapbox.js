@@ -41,11 +41,41 @@ function matchedVenueIdentity(address, queryTokens) {
   return wanted.some(w => used.has(w));
 }
 
+// matchedVenueIdentity above verifies a match against whatever comes before
+// the query's FIRST comma — so prepending a venue name only helps when
+// locationText is vague ("East Village", a bare city/neighborhood) and
+// actively breaks the check when locationText is already a full street
+// address, since the venue name then occupies the slot the check verifies
+// the address against instead of the address itself. Confirmed live during
+// the TikTok import feature's build: geocoding "Zaidi's NYC, 139 Division
+// St, New York, NY 10002" returned null while the address alone resolved
+// correctly. A leading digit is a reliable enough signal that a string is
+// already a real street address.
+const LOOKS_LIKE_STREET_ADDRESS = /^\s*\d/;
+
+/**
+ * Builds a safe geocode query from a venue name and a location string of
+ * unknown specificity — used by any caller that has both a name and a
+ * loosely-sourced location (as opposed to a scraper's own already-complete
+ * address field, which should just be passed to geocodeAddress directly).
+ */
+export function buildGeocodeQuery(venueName, locationText) {
+  if (venueName && !LOOKS_LIKE_STREET_ADDRESS.test(locationText)) {
+    return `${venueName}, ${locationText}`;
+  }
+  return locationText;
+}
+
 /**
  * Geocode a single address string via the Mapbox Geocoding API.
  * Returns { longitude, latitude, neighborhood, confidence } or null on failure.
+ *
+ * Exported (unlike the rest of this file's helpers) so a synchronous,
+ * one-off caller — e.g. the TikTok import preview endpoint, which needs a
+ * point on the map immediately rather than waiting for the next
+ * geocode-pending batch pass — can geocode a single address inline.
  */
-async function geocodeAddress(address, token) {
+export async function geocodeAddress(address, token) {
   const encoded = encodeURIComponent(address);
   const bbox = `${TRI_STATE_BBOX.minLng},${TRI_STATE_BBOX.minLat},${TRI_STATE_BBOX.maxLng},${TRI_STATE_BBOX.maxLat}`;
   // country + bbox keep Mapbox from matching same-named POIs outside the

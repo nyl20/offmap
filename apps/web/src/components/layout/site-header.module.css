@@ -5,9 +5,10 @@
   height: var(--header-height);
   display: flex;
   align-items: center;
-  background: rgba(26, 32, 54, 0.86);
+  background: var(--color-header-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.35s ease, border-color 0.35s ease;
 }
 
 .inner {
@@ -33,7 +34,7 @@
 }
 
 .brand .dot {
-  color: var(--color-mint);
+  color: var(--icon-fill, var(--color-mint));
 }
 
 .brandSub {

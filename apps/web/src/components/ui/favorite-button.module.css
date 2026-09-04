@@ -21,6 +21,13 @@
   outline-offset: 2px;
 }
 
+/* Contrast exception: this heart sits on a dark circle over a photo, so it
+   must stay white (or coral once saved) rather than the light-mode
+   --icon-line default. */
+.favorite svg {
+  color: inherit;
+}
+
 .saved {
   color: var(--color-coral);
 }

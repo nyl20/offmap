@@ -37,6 +37,13 @@
   cursor: pointer;
 }
 
+/* Contrast exception: these sit on a dark circle over a photo (or mint once
+   saved), so they must keep that color rather than the light-mode
+   --icon-line default. */
+.floatBtn svg {
+  color: inherit;
+}
+
 .back {
   left: 18px;
 }

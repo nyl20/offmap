@@ -1,0 +1,209 @@
+.mount {
+  position: fixed;
+  top: 0;
+  right: 48px;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.vertical {
+  will-change: transform, opacity;
+}
+
+/* A plain, non-bouncy fall — the bounce itself now happens per-link (see
+   .linkWrap), so the whole assembly just eases smoothly into place. */
+.drop {
+  animation: chainFall 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.retract {
+  animation: chainRetract 0.55s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+.bracket {
+  width: 8px;
+  height: 6px;
+  margin: 0 auto;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(#8a94a1, #565f6b);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.swing {
+  transform-origin: top center;
+  animation: chainSwing 2.1s cubic-bezier(0.45, 0, 0.55, 1) 0.68s both;
+}
+
+.chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3.7px;
+  padding-top: 3px;
+}
+
+/* Each link (bead or grip) gets its own delayed copy of the same bounce
+   keyframe (delay + amplitude set inline per index in PullChain), so the
+   column visibly bends as the wave travels down it instead of the whole
+   chain translating as one rigid piece. */
+.linkWrap {
+  display: flex;
+  justify-content: center;
+  animation: itemBounce 0.55s cubic-bezier(0.32, 0.4, 0.24, 1) both;
+}
+
+.tugAnim {
+  animation: itemBounce 0.5s ease-out both;
+}
+
+.bead {
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  flex: none;
+  background: radial-gradient(circle at 30% 22%, #ffffff 0%, #eef1f3 12%, #c7cfd6 32%, #929aa3 55%, #5f6670 78%, #3d434a 100%);
+  box-shadow:
+    inset 0 -0.75px 0.75px rgba(0, 0, 0, 0.45),
+    inset 0 0.5px 0.5px rgba(255, 255, 255, 0.5),
+    0 0.5px 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* A short bright sliver between beads, echoing the thin exposed wire of a
+   real ball chain. */
+.bead::after {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 4px;
+  margin: 0 auto;
+  background: linear-gradient(#d7dce1, #6b7178);
+}
+
+.grip {
+  margin-top: 2px;
+  width: 7.5px;
+  height: 32px;
+  flex: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  background: linear-gradient(
+    115deg,
+    #3d434a 0%,
+    #7d848c 12%,
+    #e7ebee 24%,
+    #ffffff 30%,
+    #c3cad1 40%,
+    #6b727a 55%,
+    #575d64 68%,
+    #9ba2a9 80%,
+    #d8dde1 90%,
+    #4a4f56 100%
+  );
+  box-shadow:
+    inset -0.5px 0 0.5px rgba(255, 255, 255, 0.35),
+    inset 0.5px 0 0.5px rgba(0, 0, 0, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.45);
+  transition: filter 0.15s ease;
+}
+
+.grip:hover {
+  filter: brightness(1.1);
+}
+
+.grip:active {
+  filter: brightness(0.92);
+}
+
+.grip:focus-visible {
+  outline: 2px solid var(--icon-line, #97acc8);
+  outline-offset: 3px;
+}
+
+@keyframes chainFall {
+  from {
+    transform: translateY(-140%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes chainRetract {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-140%);
+    opacity: 0;
+  }
+}
+
+@keyframes chainSwing {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  8% {
+    transform: rotate(15deg);
+  }
+  24% {
+    transform: rotate(-10deg);
+  }
+  42% {
+    transform: rotate(6deg);
+  }
+  60% {
+    transform: rotate(-3.5deg);
+  }
+  78% {
+    transform: rotate(1.8deg);
+  }
+  92% {
+    transform: rotate(-0.6deg);
+  }
+}
+
+/* One link's bounce: down, rebound past center, a couple of decaying
+   overshoots, settle. --amp (set per-element) scales it, so linking these
+   up with a per-index delay is what produces the bending wave. */
+@keyframes itemBounce {
+  0% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(var(--amp, 6px));
+  }
+  50% {
+    transform: translateY(calc(var(--amp, 6px) * -0.5));
+  }
+  72% {
+    transform: translateY(calc(var(--amp, 6px) * 0.22));
+  }
+  88% {
+    transform: translateY(calc(var(--amp, 6px) * -0.08));
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop,
+  .retract,
+  .swing,
+  .linkWrap,
+  .tugAnim {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .mount {
+    right: 20px;
+  }
+}

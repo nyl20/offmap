@@ -24,6 +24,10 @@
   gap: 8px;
 }
 
+/* Same background treatment as the homepage search bar (search-bar.module.css
+   .bar) — an opaque elevated surface rather than the translucent/blurred
+   .color-map-panel-bg the pills below still use, so no backdrop-filter here
+   (nothing shows through an opaque background). */
 .search {
   flex: 1;
   min-width: 0;
@@ -32,14 +36,14 @@
   gap: 9px;
   padding: 12px 15px;
   border-radius: var(--radius-md);
-  background: rgba(26, 32, 54, 0.88);
-  backdrop-filter: blur(8px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
 .search svg {
   flex: none;
-  color: var(--color-text-tertiary);
+  color: var(--icon-line, var(--color-text-tertiary));
 }
 
 .search input {
@@ -54,7 +58,7 @@
 }
 
 .search input::placeholder {
-  color: #c7cde4;
+  color: var(--color-text-tertiary);
 }
 
 .clear {
@@ -86,20 +90,21 @@
   border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 700;
-  background: rgba(26, 32, 54, 0.82);
+  background: var(--color-map-panel-bg);
   backdrop-filter: blur(8px);
-  color: #c7cde4;
-  border: none;
+  color: var(--icon-line, #c7cde4);
+  border: 1px solid var(--color-border);
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .pillActive {
-  background: var(--color-mint);
-  color: #10261f;
+  background: var(--icon-fill, var(--color-mint));
+  color: var(--color-on-fill, #10261f);
 }
 
 .backPill {
-  background: rgba(141, 233, 213, 0.22);
-  color: var(--color-mint);
+  background: var(--icon-fill-tint, rgba(141, 233, 213, 0.22));
+  border-color: var(--icon-fill, var(--color-mint));
+  color: var(--icon-fill, var(--color-mint));
 }

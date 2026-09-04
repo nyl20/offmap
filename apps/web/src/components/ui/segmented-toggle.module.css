@@ -16,7 +16,7 @@
   bottom: 4px;
   left: 0;
   border-radius: var(--radius-pill);
-  background: var(--color-mint);
+  background: var(--icon-fill, var(--color-mint));
   transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1), width 0.28s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform, width;
 }
@@ -36,7 +36,13 @@
 }
 
 .itemActive {
-  color: #10261f;
+  color: var(--color-on-fill, #10261f);
+}
+
+/* Contrast exception: this icon sits on the solid mint indicator, so it must
+   stay dark rather than picking up the light-mode --icon-line color. */
+.itemActive svg {
+  color: inherit;
 }
 
 .md .item {

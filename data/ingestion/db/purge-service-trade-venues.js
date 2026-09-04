@@ -23,6 +23,15 @@ const TRADE_KEYWORDS = [
   // 'clean', which would false-positive on legitimate venues/events with
   // "clean" in the name (e.g. "Clean Plates Food Festival").
   'cleaning service', 'house cleaning', 'janitorial', 'maid service',
+  // Roofing/exterior/general contractors — the same pre-allowlist craft=*
+  // bug also pulled these in (e.g. "ProTech Roofing & Exterior", "Proline
+  // Roofing"), but this list had no construction-trade terms so they
+  // slipped through every prior purge pass. 'contractor'/'construction' are
+  // broader terms with moderate false-positive risk (a legitimately-named
+  // venue could contain them) — kept here deliberately since this script is
+  // report-first (see findSuspectCraftShopVenues) and dry-run by default.
+  'roofing', 'roofer', 'landscap', 'fence', 'fencing', 'pest control',
+  'contractor', 'construction',
 ];
 
 const NAME_PATTERN = TRADE_KEYWORDS.join('|');
@@ -47,10 +56,14 @@ export function isGenericOsmCraftShopVenue(v) {
 }
 
 /**
- * Finds venues that came from the OSM permanent-venue scraper and whose name
- * matches a service-trade keyword. Pure lookup — no writes. ilike can't do
- * regex alternation, so this filters client-side against the full OSM set
- * rather than trying to encode TRADE_KEYWORDS into one ilike pattern.
+ * Finds venues whose name matches a service-trade keyword. Pure lookup — no
+ * writes. ilike can't do regex alternation, so this filters client-side
+ * against the full venues set rather than trying to encode TRADE_KEYWORDS
+ * into one ilike pattern.
+ *
+ * Not scoped to geocode_provider='OpenStreetMap' — junk isn't proven 100%
+ * OSM-exclusive (non-OSM service-trade rows have shown up in production
+ * too), and this scan is cheap enough to run over the whole table.
  */
 export async function findServiceTradeVenues(db) {
   const rows = [];
@@ -65,7 +78,6 @@ export async function findServiceTradeVenues(db) {
     const { data, error } = await db
       .from('venues')
       .select('id, name, address, categories')
-      .eq('geocode_provider', 'OpenStreetMap')
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 

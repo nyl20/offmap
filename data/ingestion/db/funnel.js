@@ -75,6 +75,10 @@ export async function upsertVenue(db, row, classification) {
     p_lng: hasCoords ? lng : null,
     p_geocode_provider: hasCoords ? source_name : null,
     p_geocode_confidence: hasCoords ? 1.0 : null,
+    p_submitted_by_user_id: row.submitted_by_user_id ?? null,
+    p_website_url: row.venue_website_url ?? null,
+    p_image_url: row.venue_image_url ?? null,
+    p_description: row.venue_description ?? null,
   });
 
   if (error) throw new Error(`upsert_venue failed: ${error.message}`);
@@ -128,6 +132,7 @@ export async function insertEvent(db, venueId, row, fetchedAt, classification) {
     p_review_status:     row.review_status ?? 'candidate',
     p_confidence_score:  row.confidence_score ?? null,
     p_notes:             row.notes ?? null,
+    p_submitted_by_user_id: row.submitted_by_user_id ?? null,
   });
 
   if (error) throw new Error(`insert_event failed: ${error.message}`);

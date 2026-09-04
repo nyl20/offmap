@@ -30,6 +30,7 @@ The backend talks to Supabase over its HTTPS Data API (`@supabase/supabase-js`),
 1. Create a Supabase project, then in its **SQL Editor** run, in order:
    - `offmap/supabase/migrations/20260621000000_init_schema.sql` — tables, indexes, RLS, `nearby_events`
    - `offmap/supabase/migrations/20260621000001_funnel_functions.sql` — the RPCs the backend writes through
+   - every other file in `offmap/supabase/migrations/`, in filename (date) order — includes `20260828000000_add_event_sources.sql`, required before `npm run onboard-source` or `npm run scrape:genericurl` will work
 2. Copy `.env` and fill in your tokens (see [Environment variables](#environment-variables)), including `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Project Settings → API.
 3. `npm install`
 4. (Optional) `npm run migrate-sqlite` — one-time backfill if you have an existing `data/events.db` from before this moved to Supabase.
@@ -45,8 +46,10 @@ The backend talks to Supabase over its HTTPS Data API (`@supabase/supabase-js`),
 | `npm run migrate-sqlite` | One-time backfill of a legacy `data/events.db` into Supabase, through the same upsert/insert RPCs the scrapers use |
 | `npm run intake <file.csv>` | Loads a CSV file of events into the database |
 | `npm run geocode-pending` | Geocodes any venues that are missing coordinates |
-| `npm run scrape` | Runs all scrapers (including Instagram), then geocodes new venues |
+| `npm run scrape` | Runs all scrapers (including Instagram and genericurl), then geocodes new venues |
 | `npm run scrape:instagram` | Runs only the Instagram scraper, skipping geocoding and global recomputes — faster for testing |
+| `npm run scrape:genericurl` | Runs only the generic-URL source scraper, skipping geocoding — faster for testing |
+| `npm run onboard-source <url>` | Checks a brand-new candidate URL once and, if it clears the quality bar, saves it into `event_sources` as `candidate` for later review/promotion — see [Generic-URL event sources](#generic-url-event-sources) |
 | `npm run serve` | Starts the web server at `http://localhost:3000` |
 
 Pass `--skip-geocode` to any scrape command to skip the Mapbox geocoding and recompute passes: `node scripts/scrape.js luma --skip-geocode`.
@@ -66,12 +69,15 @@ Pass `--skip-geocode` to any scrape command to skip the Mapbox geocoding and rec
 | `REDDIT_CLIENT_SECRET` | No | Paired with `REDDIT_CLIENT_ID` |
 | `EVENTBRITE_TOKEN` | No | Reserved for future use — Eventbrite's search API is currently deprecated; the scraper uses HTML scraping instead (no token required) |
 | `APIFY_TOKEN` | No | Apify token (apify.com → Settings → Integrations) — runs the `apify/instagram-post-scraper` actor to fetch posts, enables `instagram.js` |
-| `GEMINI_API_KEY` | No | Google Gemini API key (free tier) — used by the Instagram scraper for image OCR and event parsing. Get one at aistudio.google.com |
+| `GROQ_API_KEY` | No | Groq API key (free tier, no card required) — used by the Instagram scraper for event parsing from captions. Get one at console.groq.com → API Keys |
+| `GEMINI_API_KEY` | No | Google Gemini API key (free tier) — used by the generic-URL scraper's text extraction fallback tiers. Get one at aistudio.google.com |
 | `PORT` | No | Server port (default: `3000`) |
 
 **Mapbox free tier:** geocoding is billed per venue address, not per scrape run. Each address is geocoded once and stored permanently. The map itself counts one load per user session.
 
-**Gemini free tier:** 1,500 requests/day on `gemini-flash-latest` — sufficient for 30 accounts at ~5 posts/day with two AI calls per post.
+**Groq free tier:** 30 requests/min, 14,400 requests/day on `llama-3.3-70b-versatile` — one call per Instagram post, comfortably covers 30+ accounts at ~10 posts/account.
+
+**Gemini free tier:** 1,500 requests/day on `gemini-flash-latest` — used only by the generic-URL scraper's LLM fallback tiers.
 
 ---
 
@@ -96,6 +102,7 @@ Schema lives in `offmap/supabase/migrations/`, not in this app — it's shared w
 |---|---|
 | `supabase.js` | `getDb()` returns a singleton `@supabase/supabase-js` client authenticated with `SUPABASE_SERVICE_ROLE_KEY` — server-side only |
 | `funnel.js` | Shared upsert logic used by both `runner.js` and `csv-intake.js`: `classifyRow` (runs `classify()` once per row so callers can pass the same result into both of the below instead of classifying twice), `upsertVenue`/`insertEvent` (call the `upsert_venue`/`insert_event` RPCs — see [Database](#database-supabase)), `recomputeCanDisplay`/`recomputeDuplicateGroups`/`recomputeCompletenessScores`/`recomputeVenueCompletenessScores`/`mergeDuplicateVenues`/`purgePastEvents` (call their respective RPCs) |
+| `eventSources.js` | CRUD + health-tracking for `event_sources`, used exclusively by `scrapers/genericurl/` and `pipelines/onboard-source.js` — not part of the shared venue/event upsert path. Plain `.from('event_sources')` calls for reads/writes; `recomputeSourceHealth()` calls the `recompute_source_health` RPC. |
 
 ### `intake/`
 
@@ -139,17 +146,36 @@ Schema lives in `offmap/supabase/migrations/`, not in this app — it's shared w
 | `brooklynmuseum.js` | **Stub** — Vercel-blocked; needs API key from brooklynmuseum.org/opencollection/api. See file for notes. |
 | `met.js` | **Stub** — Vercel-blocked; no events-specific API. See file for notes. |
 | `museums.js` | NYC museums & art galleries as permanent **venues**, not events — OpenStreetMap Overpass API (`tourism=museum`/`tourism=gallery` within the NYC bbox), no key needed. Exports `fetchVenues()` + `venueOnly = true` instead of `fetchEvents()`; `runner.js` routes these through `upsertVenue()` only (never `insertEvent()`). Supplies coordinates directly (skips Mapbox forward geocoding) and the raw OSM `opening_hours` string into `venue_opening_hours`. Writes OSM's `addr:suburb`/`is_in:neighbourhood` into `neighborhood` directly when present; venues OSM didn't tag with one fall through to the regular `backfillNeighborhoods()` reverse-geocode pass. Source name logged as `osm_museums`. |
-| `instagram.js` | Instagram public accounts listed in `config/instagram_accounts.json`. Calls `fetchApifyPosts` (runs the `apify/instagram-post-scraper` Apify actor) to fetch new posts, then `extractMedia` (Gemini Vision OCR on images and video keyframes) and `parseEvents` (Gemini structured extraction, one post can yield several events e.g. a roundup) per post. Requires `APIFY_TOKEN` and `GEMINI_API_KEY`. All events land with `needs_review` status — nothing displays until approved. Source name: `instagram/@username`. Run alone with `npm run scrape:instagram`. |
+| `instagram.js` | **Paused** — built and functional (Apify fetches posts, `parseEvents` extracts structured events via Groq's free tier) but not currently registered in `pipelines/runner.js`'s `SCRAPERS` array, so it doesn't run under `npm run scrape` or `npm run scrape:instagram`. Instagram public accounts listed in `config/instagram_accounts.json`. Calls `fetchApifyPosts` (runs the `apify/instagram-post-scraper` Apify actor) to fetch new posts, then `parseEvents` (Groq structured extraction on the post caption, one post can yield several events e.g. a roundup) per post. Requires `APIFY_TOKEN` and `GROQ_API_KEY`. All events would land with `needs_review` status — nothing displays until approved. Source name: `instagram/@username`. To resume: add `GROQ_API_KEY` to `.env`, re-add `instagram` to the `SCRAPERS` array in `pipelines/runner.js`. |
+| `genericurl/` | Arbitrary venue-website URLs registered in the `event_sources` table (see [Generic-URL event sources](#generic-url-event-sources) below) — not a fixed feed like every other scraper here. Detects whether a page publishes events and extracts them at the cheapest tier that works: schema.org JSON-LD/microdata, a platform adapter (Luma/Eventbrite/Partiful/Webflow), a generic embedded-JSON-state scan, then (only on a concrete validation failure) a small Gemini call on trimmed page text, escalating to a larger-context Gemini call as a last resort. Headless rendering is deliberately not implemented yet — see the module's own comments. Run alone with `npm run scrape:genericurl`. |
 
 ### `scrapers/instagram/`
 
-The AI-powered extraction layer used exclusively by `instagram.js`. Requires a Gemini API key (free tier) and an Apify token.
+**Paused along with `instagram.js` above** — not part of the active pipeline. The extraction layer used exclusively by `instagram.js`. Requires a Groq API key (free tier) and an Apify token.
 
 | File | Purpose |
 |---|---|
-| `fetchApify.js` | Runs the `apify/instagram-post-scraper` actor (via `apify-client`) for every account in `config/instagram_accounts.json`, downloads each post's media (images/video, including carousel child posts) to `/tmp/instagram_media/`, and returns posts normalized to `{ shortcode, username, caption, timestamp, media_type, media_paths, media_urls, post_url }`. |
-| `extractMedia.js` | Accepts a list of local media paths. Images are base64-encoded and sent to Gemini Vision (`gemini-flash-latest`). Videos are first split into keyframes via `ffmpeg` (1 frame every 10s), then each frame is sent to Gemini Vision. Returns all extracted text concatenated. |
-| `parseEvent.js` | Sends caption text + extracted media text to Gemini (`gemini-flash-latest`) with a structured prompt and JSON response schema. Resolves relative dates against the post's timestamp, filters categories to the controlled vocab, and returns an array of structured event objects (empty if the post describes no upcoming events — a post can also describe several, e.g. a roundup). Exports `parseEvents`. |
+| `fetchApify.js` | Runs the `apify/instagram-post-scraper` actor (via `apify-client`) for every account in `config/instagram_accounts.json` and returns posts normalized to `{ shortcode, username, caption, timestamp, media_type, media_urls, post_url }`. Media URLs are read directly from the Apify response (CDN links, used for display) — nothing is downloaded to disk. |
+| `parseEvent.js` | Sends caption text to Groq (`llama-3.3-70b-versatile`) with a structured prompt and JSON schema (strict structured outputs). Resolves relative dates against the post's timestamp, filters categories to the controlled vocab, and returns an array of structured event objects (empty if the post describes no upcoming events — a post can also describe several, e.g. a roundup). Exports `parseEvents`. |
+
+### `scrapers/genericurl/`
+
+The detect/extract pipeline used exclusively by `genericurl.js` (technically `genericurl/index.js`) against sources in the `event_sources` table.
+
+| File | Purpose |
+|---|---|
+| `index.js` | The scraper entry point (`name`/`envKey`/`fetchEvents()`). Reads `active`/`quiet` sources, runs `pipeline.processSource()` per one with a shared per-run LLM call budget (`GENERICURL_MAX_LLM_CALLS_PER_RUN`, default 100), records health via `db/eventSources.js`, then calls `recompute_source_health()` once. |
+| `pipeline.js` | Orchestrates one source: cache/diff short-circuit → `detectSignals.js` → deterministic/adapter extraction → render-escalation check → LLM tiers (budget permitting) → `validate.js`. Every exit path returns a `status` + reason code; nothing is ever fabricated. |
+| `fetchRaw.js` | Plain HTTP `fetchHtml()`/`fetchJson()` — the cheapest stage, tried first everywhere. |
+| `detectSignals.js` | The ordered, short-circuiting detection chain: JSON-LD → known-platform match → generic embedded-state (`__NEXT_DATA__`/`__NUXT__`/etc.) → keyword+date-density heuristic → no signal. |
+| `renderDecision.js` | Decides whether a plain-fetch result shows a genuine empty-shell SPA signature. `renderHeadless()` currently throws (`render_unsupported`) — Playwright is deliberately not added yet, see the file's own comments. |
+| `validate.js` | Confidence scoring + required-field/date-plausibility checks, applied identically to every extraction tier. The single "stop or escalate" gate. |
+| `contentHash.js` | Hashing helpers for the cache/diff gate — stripped text, shadow-API JSON body, or a bundle-fingerprint proxy. |
+| `adapters/luma.js`, `eventbrite.js`, `partiful.js`, `webflow.js` | Platform adapters, highest confidence/lowest marginal cost when they match. Luma's calendar-page path calls Luma's own public `api.lu.ma/calendar/get-items` shadow API rather than needing headless rendering. |
+| `extract/deterministic.js` | Tier-1 JSON-LD/microdata scan, adapter-agnostic. |
+| `extract/trimText.js` | HTML → trimmed visible text for the LLM tiers, prioritizing text around date-like substrings over a naive head-of-document cutoff. |
+| `extract/llmSmall.js` | Tier 2 — `gemini-flash-lite-latest` on a ~6K-char snippet. |
+| `extract/llmLarge.js` | Tier 3, last resort — `gemini-flash-latest` on a ~20K-char snippet. Same vendor/family as tier 2, just more context. |
 
 ### `config/`
 
@@ -166,6 +192,7 @@ The AI-powered extraction layer used exclusively by `instagram.js`. Requires a G
 | `geocode-pending.js` | CLI entry point for `npm run geocode-pending` |
 | `backfill-categories.js` | CLI entry point for `npm run backfill-categories` |
 | `scrape.js` | CLI entry point for `npm run scrape`. Pass scraper names to run a subset (e.g. `node pipelines/scrape.js luma instagram`). Pass `--skip-geocode` to skip the Mapbox geocoding and recompute passes. |
+| `onboard-source.js` | CLI entry point for `npm run onboard-source <url>` — checks a brand-new URL once and saves it into `event_sources` (as `candidate`) if it clears a quality bar. See [Generic-URL event sources](#generic-url-event-sources). |
 | `serve.js` | CLI entry point for `npm run serve` |
 
 ### `public/`
@@ -209,6 +236,34 @@ Approve or reject an event:
 ```
 POST /api/events/42/status   { "status": "approved" }
 ```
+
+---
+
+## Generic-URL event sources
+
+Every other scraper in this pipeline targets one fixed, hand-written feed. `scrapers/genericurl/` is different: it's a registry of arbitrary venue-website URLs (a small gallery's Webflow site, an individual host's Luma calendar, an Eventbrite organizer page) tracked in the `event_sources` table, checked automatically as part of `npm run scrape`, and monitored for staleness/breakage over time.
+
+**Onboarding a new URL:**
+```
+npm run onboard-source https://example.com/events
+```
+Runs the same detect → extract → validate pipeline once, prints what it found, and — only if it finds at least one valid event at average confidence ≥0.6 — saves the URL into `event_sources` with `status = 'candidate'`. Nothing is added automatically to the recurring schedule; a candidate sits idle until a human reviews it.
+
+**Promoting a candidate:** open `supabase/reviews/event_sources_review.sql` in the Supabase SQL Editor, check the `candidate` rows, and flip one to `status = 'active'` once you're satisfied with what it found. From then on `npm run scrape` (and `npm run scrape:genericurl`) checks it every run.
+
+**Health states** (`event_sources.status`):
+
+| Status | Meaning | Checked by the scraper? |
+|---|---|---|
+| `candidate` | Onboarded, awaiting manual promotion | No |
+| `active` | Confirmed good, checked every run | Yes |
+| `quiet` | No new/future event seen in 45+ days — automatic, reversible the moment it lists something new again | Yes |
+| `broken` | 5 consecutive hard failures (blocked/not found/no signal/extraction failed) — automatic | No |
+| `disabled` | Confirmed dead — manual only, via the review SQL file | No |
+
+Automatic transitions only ever move a source toward `quiet`/`broken`, never toward `disabled` and never `candidate → active` — matching the manual-confirmation pattern this schema already uses for venue-duplicate merges. See `supabase/reviews/event_sources_review.sql` for the full manual workflow (checking what's pending, disabling a confirmed-dead source, resetting a `broken` source after a transient outage).
+
+**Cost tiers, cheapest first:** schema.org JSON-LD/microdata → a platform adapter (Luma/Eventbrite/Partiful/Webflow) → a generic scan of framework-embedded JSON (`__NEXT_DATA__` and similar) → a small Gemini call (`gemini-flash-lite-latest`) on trimmed page text → a larger-context Gemini call (`gemini-flash-latest`) as a last resort. Each tier only runs when the previous one failed a concrete validation check (unparseable date, missing location, or a mismatch between rows found and date-like text visible on the page) — most JSON-LD/adapter-covered sites never reach an LLM call at all. Headless browser rendering (Playwright) is intentionally not implemented yet — see `scrapers/genericurl/renderDecision.js` for why and what happens when a source would need it (`render_unsupported`, recorded but not treated as the source's fault).
 
 ---
 

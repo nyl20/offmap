@@ -32,9 +32,9 @@
 }
 
 .circleActive {
-  border-color: var(--color-mint);
-  box-shadow: 0 0 0 3px var(--color-mint-soft);
-  color: var(--color-mint);
+  border-color: var(--icon-fill, var(--color-mint));
+  box-shadow: 0 0 0 3px var(--icon-fill-soft, var(--color-mint-soft));
+  color: var(--icon-fill, var(--color-mint));
 }
 
 .label {

@@ -1,5 +1,4 @@
 import { ApifyClient } from 'apify-client';
-import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { readFileSync } from 'fs';
 import { dirname } from 'path';
@@ -8,52 +7,29 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
 const CONFIG_PATH = join(PROJECT_ROOT, 'config', 'instagram_accounts.json');
-const MEDIA_DIR = '/tmp/instagram_media';
 
 const ACTOR_ID = 'apify/instagram-post-scraper';
 const POSTS_PER_ACCOUNT = 10;
 
-async function downloadFile(url, destPath) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
-  });
-  if (!res.ok) throw new Error(`download failed: ${res.status}`);
-  await writeFile(destPath, Buffer.from(await res.arrayBuffer()));
-}
-
-/** Downloads an item's media (image(s) or video) to a local dir; returns { mediaPaths, mediaUrls }. */
-async function downloadItemMedia(item, destDir) {
-  const mediaPaths = [];
-  const mediaUrls = [];
-
+/** Collects an item's media URLs (image(s) or video) directly from the Apify response — no download. */
+function collectMediaUrls(item) {
   const nodes = Array.isArray(item.childPosts) && item.childPosts.length
     ? item.childPosts
     : [item];
 
-  await mkdir(destDir, { recursive: true });
-
-  for (const [i, node] of nodes.entries()) {
-    const isVideo = Boolean(node.videoUrl);
-    const url = isVideo ? node.videoUrl : (node.displayUrl ?? node.imageUrl);
-    if (!url) continue;
-
-    const dest = join(destDir, isVideo ? `video_${i}.mp4` : `image_${i}.jpg`);
-    try {
-      await downloadFile(url, dest);
-      mediaPaths.push(dest);
-      mediaUrls.push(url);
-    } catch (err) {
-      console.error(`[fetchApify] media download failed for ${url}: ${err.message}`);
-    }
+  const mediaUrls = [];
+  for (const node of nodes) {
+    const url = node.videoUrl ?? node.displayUrl ?? node.imageUrl;
+    if (url) mediaUrls.push(url);
   }
 
-  return { mediaPaths, mediaUrls };
+  return mediaUrls;
 }
 
 /**
  * Runs the Apify Instagram post scraper for all configured accounts and
  * returns posts normalized to the same shape the old fetch.py emitted:
- * { shortcode, username, caption, timestamp, media_type, media_paths, media_urls, post_url }.
+ * { shortcode, username, caption, timestamp, media_type, media_urls, post_url }.
  */
 export async function fetchApifyPosts() {
   const { accounts = [] } = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
@@ -79,22 +55,15 @@ export async function fetchApifyPosts() {
     const shortcode = item.shortCode ?? item.shortcode;
     if (!username || !shortcode) continue;
 
-    const destDir = join(MEDIA_DIR, `${username}_${shortcode}`);
-    let media = { mediaPaths: [], mediaUrls: [] };
-    try {
-      media = await downloadItemMedia(item, destDir);
-    } catch (err) {
-      console.error(`[fetchApify] ${username}/${shortcode}: media download failed — ${err.message}`);
-    }
+    const mediaUrls = collectMediaUrls(item);
 
     posts.push({
       shortcode,
       username,
       caption: item.caption ?? '',
       timestamp: item.timestamp,
-      media_type: item.type ?? (media.mediaPaths.length > 1 ? 'Sidecar' : 'Image'),
-      media_paths: media.mediaPaths,
-      media_urls: media.mediaUrls,
+      media_type: item.type ?? (mediaUrls.length > 1 ? 'Sidecar' : 'Image'),
+      media_urls: mediaUrls,
       post_url: item.url ?? `https://www.instagram.com/p/${shortcode}/`,
     });
   }

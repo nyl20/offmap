@@ -13,7 +13,10 @@
     "serve": "node pipelines/serve.js",
     "scrape": "node pipelines/scrape.js",
     "scrape:instagram": "node pipelines/scrape.js instagram --skip-geocode",
-    "scrape:venues": "node pipelines/scrape.js local-spots --skip-geocode"
+    "scrape:venues": "node pipelines/scrape.js local-spots --skip-geocode",
+    "scrape:genericurl": "node pipelines/scrape.js genericurl --skip-geocode",
+    "onboard-source": "node pipelines/onboard-source.js",
+    "test-tiktok-extract": "node pipelines/test-tiktok-extract.js"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
@@ -23,6 +26,7 @@
     "csv-parse": "^5.5.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "groq-sdk": "^1.6.0",
     "node-fetch": "^3.3.2"
   }
 }

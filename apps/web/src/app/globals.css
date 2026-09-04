@@ -1,6 +1,9 @@
 /* Design tokens mirrored from packages/shared/src/tokens.ts — CSS custom
    properties can't import a TS module, so these are hand-maintained in
-   parallel. Keep values identical to tokens.ts (see that file's comment). */
+   parallel. Keep values identical to tokens.ts (see that file's comment).
+   Dark is still the default/only palette tokens.ts describes — light mode
+   below is a website-only addition, toggled via [data-theme="light"] on
+   <html> (see the pull chain in home-experience). */
 :root {
   --color-bg: #1a2036;
   --color-bg-alt: #1b2138;
@@ -11,6 +14,11 @@
   --color-text: #f4f6fc;
   --color-text-secondary: #8891b3;
   --color-text-tertiary: #626c93;
+  --color-header-bg: rgba(26, 32, 54, 0.86);
+  /* Floating controls over the Discover map (search bar, filter pills) —
+     translucent + blurred like the header, tuned slightly more opaque so
+     text stays legible over varied map tile colors. */
+  --color-map-panel-bg: rgba(26, 32, 54, 0.88);
 
   --color-mint: #8de9d5;
   --color-mint-soft: rgba(141, 233, 213, 0.16);
@@ -39,6 +47,58 @@
   --header-height: 72px;
 }
 
+/* Light mode — swapped in by the homepage pull chain (see PullChain), which
+   toggles data-theme and mirrors the choice to localStorage. --icon-line
+   only exists here: dark mode keeps icons on their original currentColor
+   behavior (see the icon rules below, which no-op when it's unset).
+   --icon-fill (and --icon-fill-opacity) used to recolor the duotone icons'
+   inner fill shape green; that stays removed on purpose, so icon fills keep
+   falling back to currentColor in both modes. The mint brand accent used
+   everywhere else (buttons, active/selected states, outlines) is overridden
+   green here instead — --color-mint/-soft plus the two fallback values that
+   are hardcoded to a mint literal (--icon-fill-tint, --color-on-fill). */
+:root[data-theme='light'] {
+  --color-bg: #f5ecc2;
+  --color-bg-alt: #efe3ab;
+  --color-bg-elevated: #fbf6e3;
+  --color-bg-elevated-2: #f2e8c9;
+  --color-bg-sheet: #fffdf6;
+  --color-border: rgba(35, 42, 26, 0.12);
+  --color-text: #292f1c;
+  --color-text-secondary: #5d6350;
+  --color-text-tertiary: #8b9078;
+  --color-header-bg: rgba(245, 236, 194, 0.86);
+  --color-map-panel-bg: rgba(245, 236, 194, 0.94);
+
+  --icon-line: #1c4286;
+
+  --color-mint: #437742;
+  --color-mint-soft: rgba(67, 119, 66, 0.18);
+  --icon-fill-tint: rgba(67, 119, 66, 0.35);
+  --color-on-fill: #fffdf6;
+}
+
+/* Phosphor icons default to currentColor; in light mode every icon's line
+   color becomes --icon-line unless a container overrides it for contrast
+   (mint pills, dark photo-overlay buttons) via an explicit `svg { color:
+   inherit }` rule co-located with that container. */
+svg {
+  color: var(--icon-line, inherit);
+}
+
+/* Duotone icons render two paths: a secondary shape at opacity 0.2 (the
+   filled background) followed by the primary detail path(s). Phosphor
+   always emits that exact opacity="0.2" attribute, so it doubles as a
+   reliable selector hook — no per-icon classnames needed. */
+svg path[opacity='0.2'] {
+  fill: var(--icon-fill, currentColor);
+  opacity: var(--icon-fill-opacity, 0.2);
+}
+
+svg path[opacity='0.2'] ~ path {
+  fill: var(--icon-line, currentColor);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -54,6 +114,7 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 a {

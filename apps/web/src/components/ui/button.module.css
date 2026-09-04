@@ -11,6 +11,12 @@
   cursor: pointer;
 }
 
+/* Contrast exception: any icon in a button should match the button's own
+   text color, not the light-mode --icon-line default. */
+.btn svg {
+  color: inherit;
+}
+
 .primary {
   background: var(--color-mint);
   color: #10261f;

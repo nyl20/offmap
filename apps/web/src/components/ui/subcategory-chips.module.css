@@ -18,7 +18,7 @@
 }
 
 .pillActive {
-  background: var(--color-mint);
-  color: #10261f;
+  background: var(--icon-fill, var(--color-mint));
+  color: var(--color-on-fill, #10261f);
   border-color: transparent;
 }

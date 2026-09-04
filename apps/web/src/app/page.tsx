@@ -2,6 +2,7 @@ import { getUpcomingEvents, getVenues } from '@offmap/db';
 import { CATEGORIES, toOffmapEvent } from '@offmap/shared';
 
 import { HomeExperience } from '@/components/home/home-experience';
+import { PullChain } from '@/components/home/pull-chain';
 import { getServerSupabase } from '@/lib/supabase/server';
 
 import styles from './page.module.css';
@@ -32,6 +33,7 @@ export default async function HomePage() {
 
   return (
     <main className="container">
+      <PullChain />
       <div className={styles.hero}>
         <h1 className={styles.heroTitle}>What&apos;s happening around the city</h1>
         <p className={styles.heroSubtitle}>
