@@ -435,6 +435,10 @@ function eventMatchesAnyCategory(event: OffmapEvent, labels: string[]) {
 }
 
 function sortImageReadyFirst(first: OffmapEvent, second: OffmapEvent) {
+  if (first.isFeatured !== second.isFeatured) {
+    return first.isFeatured ? -1 : 1;
+  }
+
   if (Boolean(first.imageUrl) !== Boolean(second.imageUrl)) {
     return first.imageUrl ? -1 : 1;
   }

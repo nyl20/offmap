@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { isEventSaved, saveEvent, unsaveEvent } from '@offmap/db';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,11 +10,16 @@ import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { fetchEventById } from '@/data/events';
 import { mockEvents } from '@/data/mock-events';
+import { useAuth } from '@/lib/auth-context';
+import { supabase } from '@/lib/supabase';
 import type { OffmapEvent } from '@/types/event';
 
 const photoAccents = [Palette.powderBlue, Palette.sunflowerGold, Palette.coral];
 
 export default function EventDetailScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const mockEvent = mockEvents.find((item) => item.id === id);
   const { data: fetchedEvent, error, isLoading } = useQuery({
@@ -24,6 +30,25 @@ export default function EventDetailScreen() {
   const event = mockEvent ?? fetchedEvent ?? mockEvents[0];
   const eventDate = formatEventDate(event.startTime);
   const eventTime = `${formatEventTime(event.startTime)} - ${formatEventTime(event.endTime)}`;
+
+  const { data: saved = false } = useQuery({
+    queryKey: ['is-saved', user?.id, event.id],
+    queryFn: () => (supabase && user ? isEventSaved(supabase, user.id, Number(event.id)) : false),
+    enabled: Boolean(user) && !mockEvent,
+  });
+
+  async function handleToggleSave() {
+    if (!user) {
+      router.push('/sign-in');
+      return;
+    }
+    if (!supabase) return;
+    const eventId = Number(event.id);
+    if (saved) await unsaveEvent(supabase, user.id, eventId);
+    else await saveEvent(supabase, user.id, eventId);
+    queryClient.setQueryData(['is-saved', user.id, event.id], !saved);
+    queryClient.invalidateQueries({ queryKey: ['saved-events', user.id] });
+  }
 
   if (!mockEvent && isLoading) {
     return (
@@ -48,7 +73,21 @@ export default function EventDetailScreen() {
           </View>
 
           <View style={styles.heroCopy}>
-            <ThemedText style={styles.categoryLabel}>{event.category}</ThemedText>
+            <View style={styles.heroTopRow}>
+              <ThemedText style={styles.categoryLabel}>{event.category}</ThemedText>
+              {!mockEvent ? (
+                <Pressable
+                  accessibilityLabel={saved ? 'Remove from saved' : 'Save'}
+                  onPress={handleToggleSave}
+                  style={styles.saveButton}>
+                  <SymbolView
+                    name={{ ios: saved ? 'heart.fill' : 'heart', web: 'favorite' }}
+                    size={20}
+                    tintColor={saved ? Palette.coral : Palette.mintCream}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
             <ThemedText style={styles.title}>{event.title}</ThemedText>
             <View style={styles.venueRow}>
               <SymbolView name={{ ios: 'map', web: 'map' }} size={16} tintColor={Palette.sunflowerGold} />
@@ -98,7 +137,7 @@ export default function EventDetailScreen() {
                   {event.heardAt ?? 'approved event source'}
                 </ThemedText>
                 <ThemedText style={styles.sharedBody}>
-                  "{event.communityNote ?? event.description}"
+                  &ldquo;{event.communityNote ?? event.description}&rdquo;
                 </ThemedText>
                 <ThemedText style={styles.confirmedText}>
                   {error ? 'Could not refresh this event from Supabase.' : 'Reviewed for display on OFFMAP'}
@@ -291,6 +330,17 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     gap: 8,
+  },
+  heroTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  saveButton: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
   },
   categoryLabel: {
     color: Palette.sunflowerGold,

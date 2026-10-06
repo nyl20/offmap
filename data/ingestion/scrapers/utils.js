@@ -246,3 +246,45 @@ export function isExcludedAudience(title, description) {
   const text = `${title ?? ''} ${description ?? ''}`.toLowerCase();
   return EXCLUDED_AUDIENCE_PATTERNS.some(pattern => text.includes(pattern));
 }
+
+// Structural venue-name patterns for things that aren't a destination a
+// visitor would seek out — a street segment, a parking lot, a veterans
+// post, a generic park facility, or a placeholder — as opposed to a real
+// place. Only patterns with near-zero false-positive risk belong here:
+// "visitor center", "pool" (Union Pool is a real live-music venue), and
+// "community center" (NYC LGBT Community Center hosts real public
+// programming) are deliberately excluded — those need human review, not an
+// automatic reject. See db/venue-quality.js for the report-only audit that
+// covers those riskier buckets against already-ingested rows.
+//
+// NYC Open Data's permit/facility feeds are the main source of these — a
+// street-closure permit's "location" is literally the closed street
+// segment, and a parks-event permit's location is often just the park
+// facility name — so venue_name ends up being the raw location string
+// rather than an actual place name.
+const IRRELEVANT_VENUE_NAME_PATTERNS = [
+  // Street segment, e.g. "WEST 97 STREET between COLUMBUS AVENUE and
+  // AMSTERDAM AVENUE" or "76th Avenue and Springfield Boulevard".
+  /\b(street|avenue|boulevard|blvd|place|road|drive|parkway)\b.*\b(between|and)\b/i,
+  // Parking lot/garage/field.
+  /\bparking\s+(lot|garage|field)\b/i,
+  // Veterans/memorial posts — VFW, American Legion, Amvets.
+  /\b(VFW|veterans?\s+of\s+foreign\s+wars|american\s+legion(\s+post)?|memorial\s+post|amvets)\b/i,
+  // NYC Parks playgrounds — never a destination in their own right.
+  /\bplayground\b/i,
+  // The literal placeholder row scrapers fall back to when an event has no
+  // real physical venue (see scrapers/*.js `|| 'Virtual/Online Events'`).
+  /^virtual\/online events$/i,
+];
+
+/**
+ * True when a venue's name structurally indicates it isn't a real
+ * destination — a street segment, parking lot, veterans post, playground,
+ * or virtual placeholder — rather than an actual place. Venues that match
+ * are dropped before insertion — see runner.js, csv-intake.js, server.js.
+ */
+export function isIrrelevantVenueName(name) {
+  const text = String(name ?? '').trim();
+  if (!text) return false;
+  return IRRELEVANT_VENUE_NAME_PATTERNS.some(pattern => pattern.test(text));
+}

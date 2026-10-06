@@ -1,8 +1,15 @@
+import { redirect } from 'next/navigation';
+
 import { SavedExperience } from '@/components/saved/saved-experience';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 import styles from './page.module.css';
 
-export default function SavedPage() {
+export default async function SavedPage() {
+  const supabase = await getServerSupabase();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) redirect('/sign-in?next=/saved');
+
   return (
     <main className="container">
       <div className={styles.hero}>

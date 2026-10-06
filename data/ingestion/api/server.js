@@ -7,6 +7,7 @@ import { NYC, upsertVenue, insertEvent, classifyRow } from '../db/funnel.js';
 import { createDraft, getDraftById, markDraftConfirmed } from '../db/socialImportDrafts.js';
 import { extractTikTokImport } from '../scrapers/tiktok/index.js';
 import { geocodeAddress, buildGeocodeQuery } from '../geocoding/mapbox.js';
+import { isIrrelevantVenueName } from '../scrapers/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dirname, '../public');
@@ -310,6 +311,9 @@ export function createServer() {
       if (!draft_id) return res.status(400).json({ error: 'draft_id is required' });
       if (!venue_name || !address) {
         return res.status(400).json({ error: 'venue_name and address are required' });
+      }
+      if (isIrrelevantVenueName(venue_name)) {
+        return res.status(400).json({ error: `venue_name "${venue_name}" looks like a street segment, parking lot, or other non-venue — not a real destination` });
       }
 
       const draft = await getDraftById(db, draft_id);

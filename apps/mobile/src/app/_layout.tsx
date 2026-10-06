@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Palette } from '@/constants/theme';
+import { AuthProvider } from '@/lib/auth-context';
 import { queryClient } from '@/lib/query-client';
 
 const offmapDarkTheme = {
@@ -21,15 +22,18 @@ const offmapDarkTheme = {
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={offmapDarkTheme}>
-        <AnimatedSplashOverlay />
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="event/[id]" options={{ title: 'Event' }} />
-          <Stack.Screen name="profile" options={{ title: 'Profile' }} />
-          <Stack.Screen name="suggest" options={{ title: 'Suggest an event' }} />
-        </Stack>
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeProvider value={offmapDarkTheme}>
+          <AnimatedSplashOverlay />
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="event/[id]" options={{ title: 'Event' }} />
+            <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+            <Stack.Screen name="suggest" options={{ title: 'Suggest an event' }} />
+            <Stack.Screen name="sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />
+          </Stack>
+        </ThemeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

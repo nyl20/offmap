@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { PageTransitionProvider } from '@/components/layout/page-transition-provider';
 import { SiteHeader } from '@/components/layout/site-header';
+import { AuthProvider } from '@/lib/auth-context';
 
 import './globals.css';
 
@@ -32,10 +33,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
-        <PageTransitionProvider>
-          <SiteHeader />
-          {children}
-        </PageTransitionProvider>
+        <AuthProvider>
+          <PageTransitionProvider>
+            <SiteHeader />
+            {children}
+          </PageTransitionProvider>
+        </AuthProvider>
       </body>
     </html>
   );

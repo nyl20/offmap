@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { FeatureCollection, Point } from 'geojson';
-import { MapTrifoldIcon } from '@phosphor-icons/react/ssr';
+import { MapTrifoldIcon, PaintBrushIcon, XIcon } from '@phosphor-icons/react/ssr';
 
 import type { VenueRow } from '@offmap/db';
 
@@ -17,6 +17,26 @@ import styles from './map-view.module.css';
 const NYC_CENTER: [number, number] = [-73.99, 40.72];
 
 const SOURCE_ID = 'venues';
+const EVENT_SOURCE_ID = 'event-pins';
+const DRAW_SOURCE_ID = 'draw-shape';
+
+// Minimum points captured on release for a stroke to count as a real shape
+// rather than an accidental click/tiny jitter.
+const MIN_DRAW_POINTS = 3;
+
+// The same Phosphor "PaintBrushIcon" glyph used on the button itself,
+// redrawn as an outline-only cursor (no fill) so it reads on the light
+// streets basemap regardless of the app's own light/dark UI theme (the map
+// style itself never changes). The hotspot (3, 23) lands on the bristle
+// tip, the icon's bottom-left point in its native 256x256 viewBox, scaled
+// to this 27px cursor.
+const PAINTBRUSH_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='27' height='27' viewBox='0 0 256 256'>` +
+    `<path d='M232,32a8,8,0,0,0-8-8c-44.08,0-89.31,49.71-114.43,82.63A60,60,0,0,0,32,164c0,30.88-19.54,44.73-20.47,45.37A8,8,0,0,0,16,224H92a60,60,0,0,0,57.37-77.57C182.3,121.31,232,76.08,232,32ZM124.42,113.55q5.14-6.66,10.09-12.55A76.23,76.23,0,0,1,155,121.49q-5.9,4.94-12.55,10.09A60.54,60.54,0,0,0,124.42,113.55Zm42.7-2.68a92.57,92.57,0,0,0-22-22c31.78-34.53,55.75-45,69.9-47.91C212.17,55.12,201.65,79.09,167.12,110.87Z' fill='none' stroke='#1A2036' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/>` +
+    `</svg>`
+)}") 3 23, crosshair`;
+
+type DrawMode = 'idle' | 'drawing' | 'active';
 
 // How long a mouse has to dwell on a dot before the preview card appears —
 // long enough that a mouse just passing over a point on its way elsewhere
@@ -40,6 +60,11 @@ const TOP_FLIP_THRESHOLD = 320;
 const CLOSE_GRACE_MS = 180;
 
 type VenueProperties = { id: number; name: string };
+type EventPinProperties = { eventId: number };
+
+/** A one-off event's location — never a standalone place, only ever shown
+ * as the event's own pin on the map while it's upcoming. */
+export type EventPin = { eventId: number; venueId: number; lat: number; lng: number; title: string };
 
 // Mapbox paint properties are canvas-rendered, not CSS — they can't read
 // --icon-line, so the theme's colors are duplicated here and kept in sync
@@ -47,10 +72,17 @@ type VenueProperties = { id: number; name: string };
 // source of truth, different mechanism.
 function getMapPaintColors() {
   const isLight = document.documentElement.dataset.theme === 'light';
+  const pinColor = isLight ? '#437742' : '#8DE9D5';
   return {
     clusterColor: isLight ? '#97acc8' : '#9AA8E8',
     clusterTextColor: isLight ? '#10261f' : '#1A2036',
-    pinColor: isLight ? '#437742' : '#8DE9D5',
+    pinColor,
+    // A one-off event's location, not a standalone place — a warm amber so
+    // it reads as "temporary" against the permanent pins' green/teal.
+    eventPinColor: isLight ? '#B5700C' : '#F0B74A',
+    // Reuses the pin color so the drawn shape reads as "the same accent",
+    // not a fourth unrelated hue.
+    drawColor: pinColor,
   };
 }
 
@@ -67,8 +99,22 @@ function toFeatureCollection(venues: VenueRow[]): FeatureCollection<Point, Venue
   };
 }
 
+function toEventFeatureCollection(pins: EventPin[]): FeatureCollection<Point, EventPinProperties> {
+  return {
+    type: 'FeatureCollection',
+    features: pins.map((p) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+      properties: { eventId: p.eventId },
+    })),
+  };
+}
+
 type MapViewProps = {
   venues: VenueRow[];
+  /** One-off event locations — never a standalone place, shown as a visually
+   * distinct pin only while their event is upcoming (see EventPin). */
+  eventPins: EventPin[];
   onMoveEnd: (center: { lat: number; lng: number }) => void;
   /** Fired when a cluster (grouped dot) is clicked, with every venue id it contains. */
   onClusterClick: (venueIds: number[]) => void;
@@ -79,14 +125,32 @@ type MapViewProps = {
   /** A dot (or its preview card) was clicked and should navigate — `originRect`
    * is where the card-expand transition should visually grow from. */
   onPointClick: (venue: VenueRow, originRect: DOMRect) => void;
+  /** An event pin was clicked and should navigate straight to that event. */
+  onEventPinClick: (eventId: number) => void;
+  /** Fired once when a freehand-drawn shape completes (a closed ring, first
+   * point duplicated at the end), and once with `null` when the draw tool's
+   * X button clears it. Whether a stroke is currently in progress is not
+   * exposed — that's fully self-contained in here (button icon, cursor, and
+   * all the mouse-event wiring). */
+  onPolygonChange: (polygon: { lat: number; lng: number }[] | null) => void;
 };
 
-export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesChange, onPointClick }: MapViewProps) {
+export function MapView({
+  venues,
+  eventPins,
+  onMoveEnd,
+  onClusterClick,
+  onViewportVenuesChange,
+  onPointClick,
+  onEventPinClick,
+  onPolygonChange,
+}: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const loadedRef = useRef(false);
   const venuesRef = useRef(venues);
   const venuesByIdRef = useRef<Map<number, VenueRow>>(new Map());
+  const eventPinsRef = useRef(eventPins);
   const [failed, setFailed] = useState(false);
 
   const [hoverPreview, setHoverPreview] = useState<{
@@ -98,6 +162,24 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
+
+  // drawModeRef is the source of truth read inside the mount-once effect's
+  // closures (its deps array is `[]`, so React state captured there would go
+  // stale — same reasoning as venuesRef/hoveredIdRef above). drawMode (state)
+  // exists purely to drive the button's rendered icon/aria-label.
+  const drawModeRef = useRef<DrawMode>('idle');
+  const [drawMode, setDrawModeState] = useState<DrawMode>('idle');
+  const drawPathRef = useRef<{ lng: number; lat: number }[]>([]);
+  const drawRafRef = useRef<number | null>(null);
+  // The button (render scope) triggers these; they're bound to the mount-once
+  // effect's `map` instance and assigned there, once.
+  const startDrawRef = useRef<() => void>(() => {});
+  const resetDrawRef = useRef<() => void>(() => {});
+
+  function setDrawMode(next: DrawMode) {
+    drawModeRef.current = next;
+    setDrawModeState(next);
+  }
 
   function scheduleClose() {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -115,6 +197,10 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
     venuesRef.current = venues;
     venuesByIdRef.current = new Map(venues.map((v) => [v.id, v]));
   }, [venues]);
+
+  useEffect(() => {
+    eventPinsRef.current = eventPins;
+  }, [eventPins]);
 
   // Dismiss the preview card on a click outside of it — deliberately not
   // stopping propagation, so an underlying map click (e.g. a different dot)
@@ -268,7 +354,74 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
         },
       });
 
+      // One-off event locations — never clustered (counts are small, and
+      // clicking one should always go straight to that one event, not a
+      // cluster-of-events interaction nobody asked for).
+      map.addSource(EVENT_SOURCE_ID, { type: 'geojson', data: toEventFeatureCollection(eventPinsRef.current) });
+      map.addLayer({
+        id: 'event-point-shadow',
+        type: 'circle',
+        source: EVENT_SOURCE_ID,
+        paint: {
+          'circle-color': '#000000',
+          'circle-opacity': 0.25,
+          'circle-blur': 0.7,
+          'circle-radius': 4,
+          'circle-translate': [0, 1.5],
+        },
+      });
+      map.addLayer({
+        id: 'event-point',
+        type: 'circle',
+        source: EVENT_SOURCE_ID,
+        paint: {
+          'circle-color': mapColors.eventPinColor,
+          'circle-opacity': 0.9,
+          'circle-radius': 5,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      map.on('click', 'event-point', (e) => {
+        if (drawModeRef.current === 'drawing') return;
+        const eventId = e.features?.[0]?.properties?.eventId;
+        if (eventId == null) return;
+        setHoverPreview(null);
+        onEventPinClick(eventId);
+      });
+
+      // The freehand draw tool's live stroke / settled shape. Always holds
+      // zero features, one LineString (mid-stroke), or one Polygon (settled)
+      // — never both — so the two geometry-type filters below never fight
+      // over what to show.
+      map.addSource(DRAW_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'draw-stroke-line',
+        type: 'line',
+        source: DRAW_SOURCE_ID,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': mapColors.drawColor, 'line-width': 3, 'line-opacity': 0.9 },
+      });
+      map.addLayer({
+        id: 'draw-polygon-fill',
+        type: 'fill',
+        source: DRAW_SOURCE_ID,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': mapColors.drawColor, 'fill-opacity': 0.12 },
+      });
+      map.addLayer({
+        id: 'draw-polygon-outline',
+        type: 'line',
+        source: DRAW_SOURCE_ID,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        layout: { 'line-join': 'round' },
+        paint: { 'line-color': mapColors.drawColor, 'line-width': 2, 'line-opacity': 0.9 },
+      });
+
       map.on('click', 'clusters', (e) => {
+        if (drawModeRef.current === 'drawing') return;
         const [feature] = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
         const clusterId = feature?.properties?.cluster_id;
         const pointCount = (feature?.properties?.point_count as number | undefined) ?? 1000;
@@ -288,6 +441,7 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
       });
 
       map.on('click', 'unclustered-point', (e) => {
+        if (drawModeRef.current === 'drawing') return;
         const id = e.features?.[0]?.properties?.id;
         if (id == null) return;
         const venue = venuesByIdRef.current.get(id);
@@ -303,6 +457,7 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
       });
 
       map.on('mousemove', 'unclustered-point', (e) => {
+        if (drawModeRef.current === 'drawing') return;
         // Moving over any pin means the mouse hasn't actually left the
         // hover area — cancel a close that started on the way here (e.g.
         // re-entering the same pin, or arriving at a different one).
@@ -334,17 +489,162 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
         scheduleClose();
       });
 
-      for (const layer of ['clusters', 'unclustered-point']) {
+      for (const layer of ['clusters', 'unclustered-point', 'event-point']) {
+        // Unguarded, these fight the draw tool's cursor: crossing a pin
+        // mid-stroke would flip it to 'pointer' on enter and '' on leave,
+        // stomping the paintbrush cursor set in handleStartDraw below.
         map.on('mouseenter', layer, () => {
+          if (drawModeRef.current === 'drawing') return;
           map.getCanvas().style.cursor = 'pointer';
         });
         map.on('mouseleave', layer, () => {
+          if (drawModeRef.current === 'drawing') return;
           map.getCanvas().style.cursor = '';
         });
       }
 
       loadedRef.current = true;
     });
+
+    // --- Freehand draw tool -------------------------------------------
+    // Bound to this specific `map` instance, exposed to the button in
+    // render scope via startDrawRef/resetDrawRef (this effect only runs
+    // once, so those refs get set exactly once, here).
+
+    function getDrawSource() {
+      return map.getSource(DRAW_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    }
+
+    function clearDrawLayer() {
+      getDrawSource()?.setData({ type: 'FeatureCollection', features: [] });
+    }
+
+    function redrawStroke() {
+      drawRafRef.current = null;
+      getDrawSource()?.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: drawPathRef.current.map((p) => [p.lng, p.lat]) },
+          },
+        ],
+      });
+    }
+
+    function handleDrawMouseMove(e: mapboxgl.MapMouseEvent) {
+      drawPathRef.current.push({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+      // Raw mousemove can fire well above 60/s during a fast drag —
+      // coalesce redraws to one per animation frame instead of jank.
+      if (drawRafRef.current == null) {
+        drawRafRef.current = requestAnimationFrame(redrawStroke);
+      }
+    }
+
+    function teardownStrokeListeners() {
+      map.off('mousemove', handleDrawMouseMove);
+      map.off('mouseup', handleDrawMouseUp);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      if (drawRafRef.current != null) {
+        cancelAnimationFrame(drawRafRef.current);
+        drawRafRef.current = null;
+      }
+      map.dragPan.enable();
+    }
+
+    function cancelStrokeToIdle() {
+      teardownStrokeListeners();
+      drawPathRef.current = [];
+      clearDrawLayer();
+      map.getCanvas().style.cursor = '';
+      document.removeEventListener('keydown', handleDrawEscape);
+      map.off('mousedown', handleDrawMouseDown);
+      setDrawMode('idle');
+    }
+
+    function finishStroke() {
+      // Guards against Mapbox's own 'mouseup' and the window fallback both
+      // firing for the same release (the canvas event bubbles to window
+      // too) — without this, a release over the map would run this twice.
+      if (drawModeRef.current !== 'drawing') return;
+      teardownStrokeListeners();
+      const path = drawPathRef.current;
+      if (path.length < MIN_DRAW_POINTS) {
+        cancelStrokeToIdle();
+        return;
+      }
+      // Auto-close the shape, connecting the release point back to the
+      // start — a lasso stroke, not an open line.
+      const closedRing = [...path, path[0]];
+      getDrawSource()?.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'Polygon', coordinates: [closedRing.map((p) => [p.lng, p.lat])] },
+          },
+        ],
+      });
+      map.getCanvas().style.cursor = '';
+      document.removeEventListener('keydown', handleDrawEscape);
+      map.off('mousedown', handleDrawMouseDown);
+      setDrawMode('active');
+      onPolygonChange(closedRing);
+    }
+
+    function handleDrawMouseUp() {
+      finishStroke();
+    }
+
+    function handleWindowMouseUp() {
+      // Covers a stroke that's dragged off the map div and released
+      // outside it — Mapbox's own 'mouseup' only fires for releases over
+      // the canvas, so without this the tool would stay stuck mid-draw.
+      finishStroke();
+    }
+
+    function handleDrawMouseDown(e: mapboxgl.MapMouseEvent) {
+      e.originalEvent.preventDefault();
+      drawPathRef.current = [{ lng: e.lngLat.lng, lat: e.lngLat.lat }];
+      map.on('mousemove', handleDrawMouseMove);
+      map.on('mouseup', handleDrawMouseUp);
+      window.addEventListener('mouseup', handleWindowMouseUp, { once: true });
+    }
+
+    function handleDrawEscape(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || drawModeRef.current !== 'drawing') return;
+      cancelStrokeToIdle();
+    }
+
+    function handleStartDraw() {
+      if (drawModeRef.current !== 'idle') return;
+      setHoverPreview(null);
+      // Must stay disabled for the whole armed period, not just mid-stroke
+      // — otherwise the very first mousedown races a native map pan.
+      map.dragPan.disable();
+      map.getCanvas().style.cursor = PAINTBRUSH_CURSOR;
+      map.on('mousedown', handleDrawMouseDown);
+      document.addEventListener('keydown', handleDrawEscape);
+      drawPathRef.current = [];
+      setDrawMode('drawing');
+    }
+
+    function handleResetDraw() {
+      if (drawModeRef.current === 'drawing') teardownStrokeListeners();
+      drawPathRef.current = [];
+      clearDrawLayer();
+      map.getCanvas().style.cursor = '';
+      document.removeEventListener('keydown', handleDrawEscape);
+      map.off('mousedown', handleDrawMouseDown);
+      setDrawMode('idle');
+      onPolygonChange(null);
+    }
+
+    startDrawRef.current = handleStartDraw;
+    resetDrawRef.current = handleResetDraw;
+    // --------------------------------------------------------------------
 
     mapRef.current = map;
     const initial = map.getCenter();
@@ -359,6 +659,10 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
       map.setPaintProperty('clusters', 'circle-color', colors.clusterColor);
       map.setPaintProperty('cluster-count', 'text-color', colors.clusterTextColor);
       map.setPaintProperty('unclustered-point', 'circle-color', colors.pinColor);
+      map.setPaintProperty('event-point', 'circle-color', colors.eventPinColor);
+      map.setPaintProperty('draw-stroke-line', 'line-color', colors.drawColor);
+      map.setPaintProperty('draw-polygon-fill', 'fill-color', colors.drawColor);
+      map.setPaintProperty('draw-polygon-outline', 'line-color', colors.drawColor);
     });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
@@ -367,6 +671,13 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
       themeObserver.disconnect();
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      // map.remove() tears down the map's own listeners, but these
+      // document/window-level ones would otherwise outlive it.
+      document.removeEventListener('keydown', handleDrawEscape);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      if (drawRafRef.current != null) cancelAnimationFrame(drawRafRef.current);
+      startDrawRef.current = () => {};
+      resetDrawRef.current = () => {};
       map.remove();
       mapRef.current = null;
     };
@@ -379,6 +690,13 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
     const source = map.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
     source?.setData(toFeatureCollection(venues));
   }, [venues]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const source = map.getSource(EVENT_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    source?.setData(toEventFeatureCollection(eventPins));
+  }, [eventPins]);
 
   if (failed) {
     return (
@@ -395,6 +713,15 @@ export function MapView({ venues, onMoveEnd, onClusterClick, onViewportVenuesCha
   return (
     <div className={styles.mapWrap}>
       <div ref={containerRef} className={styles.map} />
+      <button
+        type="button"
+        className={`${styles.drawButton} ${drawMode !== 'idle' ? styles.drawButtonActive : ''}`}
+        aria-label={drawMode === 'idle' ? 'Draw an area to filter the map' : 'Clear drawn area'}
+        aria-pressed={drawMode !== 'idle'}
+        onClick={() => (drawMode === 'idle' ? startDrawRef.current() : resetDrawRef.current())}
+      >
+        {drawMode === 'idle' ? <PaintBrushIcon weight="bold" size={18} /> : <XIcon weight="bold" size={18} />}
+      </button>
       {hoverPreview ? (
         <div
           ref={anchorRef}

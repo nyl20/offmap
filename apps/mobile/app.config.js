@@ -30,6 +30,7 @@ export default {
     },
     plugins: [
       'expo-router',
+      'expo-secure-store',
       ['@rnmapbox/maps', { RNMapboxMapsVersion: '11.20.1' }],
       [
         'expo-location',

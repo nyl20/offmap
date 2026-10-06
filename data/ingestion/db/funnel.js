@@ -181,6 +181,24 @@ export async function recomputeVenueCanDisplay(db) {
   return data;
 }
 
+// Promotes venues to is_permanent=true once they've accumulated enough real
+// event history (see supabase/migrations/20261006000000_add_dynamic_venue_permanence.sql).
+// Must run before recomputeVenueCanDisplay, which reads is_permanent.
+export async function recomputeVenuePermanence(db) {
+  const { data, error } = await db.rpc('recompute_venue_permanence');
+  if (error) throw new Error(`recompute_venue_permanence failed: ${error.message}`);
+  return data;
+}
+
+// Deletes non-permanent venues with zero remaining events — the cleanup
+// side of dynamic permanence: a one-off event's venue disappears once that
+// event is gone (purged by purgePastEvents), rather than lingering forever.
+export async function purgeOrphanedTemporaryVenues(db) {
+  const { data, error } = await db.rpc('purge_orphaned_temporary_venues');
+  if (error) throw new Error(`purge_orphaned_temporary_venues failed: ${error.message}`);
+  return data;
+}
+
 export async function mergeCrossNameDuplicateVenues(db) {
   const { data, error } = await db.rpc('merge_cross_name_duplicate_venues');
   if (error) throw new Error(`merge_cross_name_duplicate_venues failed: ${error.message}`);

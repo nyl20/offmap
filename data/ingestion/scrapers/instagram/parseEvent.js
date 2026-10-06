@@ -17,10 +17,12 @@ const VALID_CATEGORIES = [
 
 const SYSTEM_INSTRUCTION = `You are an event data extractor for an NYC events app.
 
-Given an Instagram post caption, extract structured
-details for every distinct upcoming event described in the post. A post may describe zero events
-(e.g. recaps, general lifestyle content), one event, or several (e.g. a roundup/listicle of NYC
-happenings) — extract each one separately.
+Given an Instagram post caption, and possibly on-screen text transcribed from the post's flyer
+image, extract structured details for every distinct upcoming event described. A post may describe
+zero events (e.g. recaps, general lifestyle content), one event, or several (e.g. a roundup/listicle
+of NYC happenings) — extract each one separately. Flyer text should be treated as equally reliable
+as the caption — many posts put the actual date/time/venue/price only on the flyer graphic and leave
+the caption purely promotional.
 Resolve relative dates ("this Saturday", "tomorrow", "next week") against the Post date provided.
 NYC is the default city for all events.
 
@@ -60,11 +62,14 @@ const RESPONSE_SCHEMA = {
 
 /**
  * Parses an Instagram post into zero or more structured event objects using Groq.
+ * `flyerText` (optional) is on-screen text OCR'd from the post's flyer image via
+ * ocrFlyer.js — included alongside the caption when present.
  * Returns an empty array if the post doesn't describe any clear upcoming events.
  */
-export async function parseEvents({ caption, postTimestamp, username }) {
+export async function parseEvents({ caption, postTimestamp, username, flyerText }) {
   const parts = [];
   if (caption) parts.push(`Caption:\n${caption}`);
+  if (flyerText) parts.push(`On-screen flyer text:\n${flyerText}`);
   parts.push(`Post date: ${postTimestamp}`);
   parts.push(`Posted by: @${username}`);
 

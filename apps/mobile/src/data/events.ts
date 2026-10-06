@@ -26,6 +26,7 @@ type SupabaseEventRow = {
   review_status: string | null;
   categories: string[] | null;
   sub_categories: string[] | null;
+  is_featured: boolean | null;
 };
 
 export async function fetchHomeEvents() {
@@ -58,6 +59,7 @@ export async function fetchHomeEvents() {
         'review_status',
         'categories',
         'sub_categories',
+        'is_featured',
       ].join(','),
     )
     .eq('review_status', 'approved')
@@ -66,6 +68,53 @@ export async function fetchHomeEvents() {
     .in('source_name', preferredSources)
     .order('start_time', { ascending: true, nullsFirst: false })
     .limit(homeEventLimit);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as unknown as SupabaseEventRow[];
+
+  return rows.map(mapSupabaseEvent);
+}
+
+// Used by the Saved tab — unlike fetchHomeEvents this doesn't restrict to
+// preferredSources or require an image_url, since a saved event can come
+// from anywhere and might not have a picture.
+export async function fetchEventsByIds(ids: number[]) {
+  if (!isSupabaseConfigured || !supabase || ids.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('events')
+    .select(
+      [
+        'id',
+        'title',
+        'description',
+        'category',
+        'tags',
+        'start_time',
+        'end_time',
+        'timezone',
+        'price_text',
+        'is_free',
+        'ticket_url',
+        'organizer_name',
+        'image_url',
+        'can_display',
+        'source_url',
+        'source_name',
+        'source_fetched_at',
+        'source_updated_at',
+        'review_status',
+        'categories',
+        'sub_categories',
+        'is_featured',
+      ].join(','),
+    )
+    .in('id', ids);
 
   if (error) {
     throw error;
@@ -112,6 +161,7 @@ export async function fetchEventById(id: string) {
         'review_status',
         'categories',
         'sub_categories',
+        'is_featured',
       ].join(','),
     )
     .eq('id', numericId)
@@ -150,6 +200,7 @@ function mapSupabaseEvent(row: SupabaseEventRow): OffmapEvent {
     tags: normalizeLabels(row.tags, row.sub_categories?.[0]).slice(0, 6),
     categoryLabels,
     createdAt: row.source_fetched_at ?? row.source_updated_at ?? startTime,
+    isFeatured: Boolean(row.is_featured),
   };
 }
 

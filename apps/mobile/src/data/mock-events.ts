@@ -21,6 +21,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 8,
     tags: ['community', 'outdoor', 'makers'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'warehouse-sound-session',
@@ -42,6 +43,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 5,
     tags: ['music', 'tonight', 'dance'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'free-scone-with-coffee',
@@ -63,6 +65,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 3,
     tags: ['breakfast', 'today', 'deal'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'popup-vinyl-swap',
@@ -84,6 +87,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 6,
     tags: ['vinyl', 'swap', 'happening now'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'sunrise-flow-yoga',
@@ -105,6 +109,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 4,
     tags: ['wellness', 'morning', 'creative'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'makers-and-shakers',
@@ -126,6 +131,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 9,
     tags: ['market', 'design', 'craft'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'abstract-painting-night',
@@ -147,6 +153,7 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 2,
     tags: ['workshop', 'painting', 'hands-on'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
   {
     id: 'neighborhood-supper-club',
@@ -168,5 +175,6 @@ export const mockEvents: OffmapEvent[] = [
     confirmations: 7,
     tags: ['social', 'dinner', 'community'],
     createdAt: '2026-06-08T00:00:00.000Z',
+    isFeatured: false,
   },
 ];

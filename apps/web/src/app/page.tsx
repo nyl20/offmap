@@ -12,7 +12,7 @@ export const revalidate = 300;
 const PREVIEW_LIMIT = 8;
 
 export default async function HomePage() {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   const results = await Promise.all(
     CATEGORIES.map(async (category) => {

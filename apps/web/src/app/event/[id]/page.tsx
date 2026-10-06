@@ -20,14 +20,14 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const row = await getEventById(getServerSupabase(), id);
+  const row = await getEventById(await getServerSupabase(), id);
   if (!row) return { title: 'Event not found — OFFMAP' };
   return { title: `${row.title} — OFFMAP`, description: row.description ?? undefined };
 }
 
 export default async function EventDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const row = await getEventById(getServerSupabase(), id);
+  const row = await getEventById(await getServerSupabase(), id);
   if (!row) notFound();
 
   const event = toOffmapEvent(row);

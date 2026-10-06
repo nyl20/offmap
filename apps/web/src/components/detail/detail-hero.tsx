@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookmarkSimpleIcon, CaretLeftIcon } from '@phosphor-icons/react/ssr';
 
 import type { CategoryAccent } from '@offmap/shared';
 
-import { isBookmarked, toggleBookmark } from '@/lib/bookmarks';
+import { useAuth } from '@/lib/auth-context';
+import { toggleSaved, useSavedIds } from '@/lib/saved';
 import styles from './detail-hero.module.css';
 
 type DetailHeroProps = {
@@ -19,20 +20,26 @@ type DetailHeroProps = {
 
 export function DetailHero({ imageUrl, accent, icon, kind, id }: DetailHeroProps) {
   const router = useRouter();
-  const [saved, setSaved] = useState(false);
+  const { user } = useAuth();
+  const savedIds = useSavedIds(user?.id ?? null);
+  const saved = kind === 'event' ? savedIds.events.has(id) : savedIds.venues.has(id);
   const [imageFailed, setImageFailed] = useState(false);
   // Some sources (Resident Advisor in particular) block hotlinking outright
   // — images.ra.co 403s any request without its own Referer — so a present
   // imageUrl is not a guarantee the <img> will actually load.
   const showImage = imageUrl && !imageFailed;
 
-  useEffect(() => {
-    // One-shot sync from localStorage on mount — SSR has no access to it, so
-    // this can't be a lazy useState initializer without risking a hydration
-    // mismatch between server ("false") and client (the real saved state).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSaved(isBookmarked(kind, id));
-  }, [kind, id]);
+  async function handleSaveClick() {
+    if (!user) {
+      router.push(`/sign-in?next=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    try {
+      await toggleSaved(kind, id, user.id);
+    } catch (err) {
+      console.error('failed to toggle saved state', err);
+    }
+  }
 
   return (
     <div className={styles.hero}>
@@ -59,7 +66,7 @@ export function DetailHero({ imageUrl, accent, icon, kind, id }: DetailHeroProps
         className={`${styles.floatBtn} ${styles.save} ${saved ? styles.saved : ''}`}
         aria-label={saved ? 'Remove from saved' : 'Save'}
         aria-pressed={saved}
-        onClick={() => setSaved(toggleBookmark(kind, id))}
+        onClick={handleSaveClick}
       >
         <BookmarkSimpleIcon weight={saved ? 'fill' : 'regular'} size={15} />
       </button>

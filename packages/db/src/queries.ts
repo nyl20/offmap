@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { EventRow, EventWithVenueRow, VenueRow } from './types';
+import type { EventRow, EventWithVenueRow, ProfileRow, VenueRow } from './types';
 
 // Every function here takes a SupabaseClient instance rather than
 // constructing one itself, so client lifecycle/env-var concerns stay in each
@@ -13,7 +13,7 @@ import type { EventRow, EventWithVenueRow, VenueRow } from './types';
 
 const EVENT_WITH_VENUE_SELECT = `
   id, venue_id, title, description, categories, sub_categories, start_time, end_time,
-  price_text, is_free, image_url, source_url, ticket_url, organizer_name,
+  price_text, is_free, image_url, source_url, ticket_url, organizer_name, is_featured,
   venues (
     id, name, address, address_line, city, region, neighborhood,
     website_url, venue_opening_hours, latitude, longitude
@@ -34,6 +34,7 @@ export async function getUpcomingEvents(
     .from('events')
     .select(EVENT_WITH_VENUE_SELECT)
     .gte('start_time', new Date().toISOString())
+    .order('is_featured', { ascending: false })
     .order('start_time', { ascending: true })
     .limit(limit);
 
@@ -72,6 +73,7 @@ export async function getEventsByVenueIds(
     .select(EVENT_WITH_VENUE_SELECT)
     .in('venue_id', venueIds)
     .gte('start_time', new Date().toISOString())
+    .order('is_featured', { ascending: false })
     .order('start_time', { ascending: true });
   if (error) throw new Error(`getEventsByVenueIds failed: ${error.message}`);
   return (data ?? []) as unknown as EventWithVenueRow[];
@@ -93,7 +95,7 @@ export async function getEventById(
 const VENUE_SELECT = `
   id, name, address, address_line, city, region, neighborhood,
   categories, sub_categories, is_permanent, website_url,
-  venue_opening_hours, description, phone, image_url, latitude, longitude
+  venue_opening_hours, description, phone, image_url, latitude, longitude, is_featured
 `;
 
 export type GetVenuesOptions = {
@@ -115,13 +117,23 @@ function applyVenueFilters(
   supabase: SupabaseClient,
   { onlyGeocoded, category, search }: Pick<GetVenuesOptions, 'onlyGeocoded' | 'category' | 'search'>
 ) {
-  // .order('id') is required for correctness, not just presentation — without
-  // an explicit stable sort, PostgREST doesn't guarantee row order is
+  // is_featured puts manually-pinned venues first within a category; .order('id')
+  // after it is required for correctness, not just presentation — without an
+  // explicit stable final sort, PostgREST doesn't guarantee row order is
   // consistent across separate .range() calls, so getVenues's pagination
   // below can silently skip/repeat rows once the table exceeds PAGE_SIZE
   // (the venues table already does). Applies even to the .limit() path so
   // both call shapes return the same first page.
-  let query = supabase.from('venues').select(VENUE_SELECT).order('id', { ascending: true });
+  let query = supabase
+    .from('venues')
+    .select(VENUE_SELECT)
+    // Only permanent, standing places belong in the main places list/map —
+    // a venue that exists only because a one-off event was held there
+    // shows up via that event's own location instead (see getUpcomingEvents/
+    // getEventById's embedded venue), never as a standalone place here.
+    .eq('is_permanent', true)
+    .order('is_featured', { ascending: false })
+    .order('id', { ascending: true });
   if (onlyGeocoded) {
     query = query.not('latitude', 'is', null).not('longitude', 'is', null);
   }
@@ -209,4 +221,87 @@ export async function getNearbyEvents(
   });
   if (error) throw new Error(`getNearbyEvents failed: ${error.message}`);
   return (data ?? []) as EventRow[];
+}
+
+// =========================================================== profiles ====
+// Unlike venues/events, these are user-scoped — RLS restricts reads to
+// "public read access to profiles" and writes to auth.uid() = id (see
+// supabase/migrations/20260621000000_init_schema.sql), so callers must pass
+// a SupabaseClient carrying the signed-in user's session, not the anon
+// client used for public venue/event reads.
+
+export async function getProfile(supabase: SupabaseClient, userId: string): Promise<ProfileRow | null> {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) throw new Error(`getProfile failed: ${error.message}`);
+  return (data ?? null) as ProfileRow | null;
+}
+
+export async function updateProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  patch: Partial<Pick<ProfileRow, 'display_name' | 'avatar_url'>>
+): Promise<ProfileRow> {
+  const { data, error } = await supabase.from('profiles').update(patch).eq('id', userId).select().single();
+  if (error) throw new Error(`updateProfile failed: ${error.message}`);
+  return data as ProfileRow;
+}
+
+// ====================================================== saved_events ====
+// Postgres unique-violation (23505) on the (user_id, event_id) primary key
+// means "already saved" — a race between two taps of the same save button
+// rather than a real failure, so it's swallowed instead of thrown.
+
+export async function getSavedEventIds(supabase: SupabaseClient, userId: string): Promise<number[]> {
+  const { data, error } = await supabase.from('saved_events').select('event_id').eq('user_id', userId);
+  if (error) throw new Error(`getSavedEventIds failed: ${error.message}`);
+  return (data ?? []).map((row) => (row as { event_id: number }).event_id);
+}
+
+export async function getSavedEvents(supabase: SupabaseClient, userId: string): Promise<EventWithVenueRow[]> {
+  const ids = await getSavedEventIds(supabase, userId);
+  return getEventsByIds(supabase, ids);
+}
+
+export async function isEventSaved(supabase: SupabaseClient, userId: string, eventId: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('saved_events')
+    .select('event_id')
+    .eq('user_id', userId)
+    .eq('event_id', eventId)
+    .maybeSingle();
+  if (error) throw new Error(`isEventSaved failed: ${error.message}`);
+  return data != null;
+}
+
+export async function saveEvent(supabase: SupabaseClient, userId: string, eventId: number): Promise<void> {
+  const { error } = await supabase.from('saved_events').insert({ user_id: userId, event_id: eventId });
+  if (error && error.code !== '23505') throw new Error(`saveEvent failed: ${error.message}`);
+}
+
+export async function unsaveEvent(supabase: SupabaseClient, userId: string, eventId: number): Promise<void> {
+  const { error } = await supabase.from('saved_events').delete().eq('user_id', userId).eq('event_id', eventId);
+  if (error) throw new Error(`unsaveEvent failed: ${error.message}`);
+}
+
+// ====================================================== saved_venues ====
+
+export async function getSavedVenueIds(supabase: SupabaseClient, userId: string): Promise<number[]> {
+  const { data, error } = await supabase.from('saved_venues').select('venue_id').eq('user_id', userId);
+  if (error) throw new Error(`getSavedVenueIds failed: ${error.message}`);
+  return (data ?? []).map((row) => (row as { venue_id: number }).venue_id);
+}
+
+export async function getSavedVenues(supabase: SupabaseClient, userId: string): Promise<VenueRow[]> {
+  const ids = await getSavedVenueIds(supabase, userId);
+  return getVenuesByIds(supabase, ids);
+}
+
+export async function saveVenue(supabase: SupabaseClient, userId: string, venueId: number): Promise<void> {
+  const { error } = await supabase.from('saved_venues').insert({ user_id: userId, venue_id: venueId });
+  if (error && error.code !== '23505') throw new Error(`saveVenue failed: ${error.message}`);
+}
+
+export async function unsaveVenue(supabase: SupabaseClient, userId: string, venueId: number): Promise<void> {
+  const { error } = await supabase.from('saved_venues').delete().eq('user_id', userId).eq('venue_id', venueId);
+  if (error) throw new Error(`unsaveVenue failed: ${error.message}`);
 }

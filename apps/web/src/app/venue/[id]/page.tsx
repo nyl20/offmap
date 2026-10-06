@@ -20,15 +20,17 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const venue = await getVenueById(getServerSupabase(), id);
-  if (!venue) return { title: 'Spot not found — OFFMAP' };
+  const venue = await getVenueById(await getServerSupabase(), id);
+  if (!venue || !venue.is_permanent) return { title: 'Spot not found — OFFMAP' };
   return { title: `${venue.name} — OFFMAP`, description: venue.description ?? undefined };
 }
 
 export default async function VenueDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const venue = await getVenueById(getServerSupabase(), id);
-  if (!venue) notFound();
+  const venue = await getVenueById(await getServerSupabase(), id);
+  // A venue that only exists because of a one-off event has no standalone
+  // page — it's only ever shown as that event's location (see event/[id]).
+  if (!venue || !venue.is_permanent) notFound();
 
   const category = primaryCategory(venue.categories);
   const accent = category?.accent ?? 'lavender';

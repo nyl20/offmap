@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MapPinIcon, MapTrifoldIcon } from '@phosphor-icons/react/ssr';
 
 import type { EventRow, EventWithVenueRow, VenueRow } from '@offmap/db';
-import { getEventsByVenueIds, getNearbyEvents, getUpcomingEvents } from '@offmap/db';
+import { getEventsByVenueIds, getNearbyEvents, getUpcomingEvents, getVenuesByIds } from '@offmap/db';
 import {
   deriveSubcategories,
   formatEventDateTime,
@@ -15,12 +15,12 @@ import {
 } from '@offmap/shared';
 
 import { getBrowserSupabase } from '@/lib/supabase/client';
-import { haversineMeters } from '@/lib/geo';
+import { haversineMeters, isPointInPolygon } from '@/lib/geo';
 import { CategoryIcon } from '@/lib/icons';
 import { usePageTransition } from '@/components/layout/page-transition-provider';
 
 import { MapFiltersOverlay, type DiscoverKindFilter } from './map-filters-overlay';
-import { MapView } from './map-view';
+import { MapView, type EventPin } from './map-view';
 import { NearbyPanel, type NearbyPanelItem } from './nearby-panel';
 import styles from './discover-experience.module.css';
 
@@ -73,6 +73,44 @@ function buildEventItem(event: EventRow, venuesById: Map<number, VenueRow>): Nea
   };
 }
 
+// getVenues() only returns permanent, standing places now (see
+// packages/db/src/queries.ts) — an event at a one-off venue (a pop-up on a
+// random block, a bar's single show) needs that venue's location fetched
+// separately, since it won't be in the `venues` prop. Builds a lookup of
+// just those "extra" venues, keyed by id, to merge alongside the permanent
+// `venuesById` wherever an event's location is needed (list subtitle text,
+// or its own map pin).
+function useEventOnlyVenues(events: EventRow[]): Map<number, VenueRow> {
+  const [extraById, setExtraById] = useState<Map<number, VenueRow>>(new Map());
+  const knownIdsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const missing = [...new Set(events.map((e) => e.venue_id))].filter((id) => !knownIdsRef.current.has(id));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = getBrowserSupabase();
+        const fetched = await getVenuesByIds(supabase, missing);
+        if (cancelled) return;
+        for (const id of missing) knownIdsRef.current.add(id);
+        setExtraById((prev) => {
+          const next = new Map(prev);
+          for (const v of fetched) next.set(v.id, v);
+          return next;
+        });
+      } catch (err) {
+        console.error('getVenuesByIds (event-only venues) failed', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [events]);
+
+  return extraById;
+}
+
 const RADIUS_METERS = 1500;
 const MOVE_DEBOUNCE_MS = 400;
 const NEARBY_PLACES_LIMIT = 30;
@@ -91,6 +129,7 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
   const [activeCategory, setActiveCategory] = useState<OffmapCategory | null>(null);
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [drawnPolygon, setDrawnPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
   const [nearbyEvents, setNearbyEvents] = useState<EventRow[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,6 +143,16 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
   const viewportDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const venuesById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
+  const venueIds = useMemo(() => new Set(venues.map((v) => v.id)), [venues]);
+  // nearbyEvents carries no venue data of its own (bare `setof events` RPC
+  // result) — fetched separately since its venue may be a one-off event
+  // location, absent from the now permanent-only `venues` prop.
+  const eventOnlyVenuesById = useEventOnlyVenues(nearbyEvents);
+  const allVenuesById = useMemo(() => {
+    const merged = new Map(venuesById);
+    for (const [id, v] of eventOnlyVenuesById) if (!merged.has(id)) merged.set(id, v);
+    return merged;
+  }, [venuesById, eventOnlyVenuesById]);
 
   function handleCategoryChange(category: OffmapCategory | null) {
     setActiveCategory(category);
@@ -137,9 +186,16 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
       if (activeCategory && !venue.categories.includes(activeCategory)) return false;
       if (activeSubcategory && !venue.sub_categories.includes(activeSubcategory)) return false;
       if (!matchesTokens(`${venue.name} ${venue.neighborhood ?? ''}`, tokens)) return false;
+      if (drawnPolygon) {
+        // Null-coordinate venues never plot on the map either (see
+        // map-view.tsx's toFeatureCollection) — treating them as "not in
+        // area" keeps what's filterable consistent with what's plottable.
+        if (venue.latitude == null || venue.longitude == null) return false;
+        if (!isPointInPolygon({ lat: venue.latitude, lng: venue.longitude }, drawnPolygon)) return false;
+      }
       return true;
     });
-  }, [venues, activeCategory, activeSubcategory, searchTerm]);
+  }, [venues, activeCategory, activeSubcategory, searchTerm, drawnPolygon]);
 
   // "Events" mode narrows pins to venues currently hosting something nearby
   // — events don't have their own coordinates, a venue's location stands in
@@ -261,7 +317,19 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
     function matchesEvent(event: EventRow) {
       if (activeCategory && !event.categories.includes(activeCategory)) return false;
       if (activeSubcategory && !event.sub_categories.includes(activeSubcategory)) return false;
-      const venueName = venuesById.get(event.venue_id)?.name ?? '';
+      const venue = allVenuesById.get(event.venue_id);
+      // Events don't have their own coordinates — they inherit their
+      // venue's location, same reasoning as baseFilteredVenues above. This
+      // check is essential for nearbyEvents (fetched independently by
+      // radius/query, so it doesn't inherit the polygon restriction the
+      // places lists get for free from baseFilteredVenues) and harmlessly
+      // redundant for focusEvents (already polygon-consistent via
+      // focusVenueIds, which is itself derived from polygon-filtered pins).
+      if (drawnPolygon) {
+        if (!venue || venue.latitude == null || venue.longitude == null) return false;
+        if (!isPointInPolygon({ lat: venue.latitude, lng: venue.longitude }, drawnPolygon)) return false;
+      }
+      const venueName = venue?.name ?? '';
       return matchesTokens(`${event.title} ${venueName}`, tokens);
     }
 
@@ -297,12 +365,12 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
           ? baseFilteredVenues.filter((v) => focusIdSet.has(v.id)).map(buildPlaceItem)
           : [];
       const events =
-        kindFilter !== 'places' ? focusEvents.filter(matchesEvent).map((e) => buildEventItem(e, venuesById)) : [];
+        kindFilter !== 'places' ? focusEvents.filter(matchesEvent).map((e) => buildEventItem(e, allVenuesById)) : [];
       return [...places, ...events];
     }
 
     const places = kindFilter !== 'events' ? nearbyPlaces() : [];
-    const events = kindFilter !== 'places' ? nearbyEvents.filter(matchesEvent).map((e) => buildEventItem(e, venuesById)) : [];
+    const events = kindFilter !== 'places' ? nearbyEvents.filter(matchesEvent).map((e) => buildEventItem(e, allVenuesById)) : [];
     return [...places, ...events];
   }, [
     panelMode,
@@ -314,8 +382,9 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
     activeCategory,
     activeSubcategory,
     searchTerm,
-    venuesById,
+    allVenuesById,
     kindFilter,
+    drawnPolygon,
   ]);
 
   const panelLabel =
@@ -337,14 +406,44 @@ export function DiscoverExperience({ venues }: { venues: VenueRow[] }) {
   const panelLoading =
     panelItems.length === 0 && (panelMode === 'nearby' ? kindFilter !== 'places' && loadingNearby : loadingFocusEvents);
 
+  // One-off event locations never appear in `venues` (permanent-only, see
+  // packages/db/src/queries.ts) — they still need a pin on the map while
+  // their event is upcoming, just not a standalone "place" pin. Sourced only
+  // from nearbyEvents, not focusEvents/cluster-viewport mode: focusEvents
+  // always comes from clicking a cluster or scanning the viewport on the
+  // venues map layer (SOURCE_ID), which is permanent-venues-only by
+  // construction, so every focusEvents row's venue_id is already in
+  // venueIds — it would always show as a place pin already, never here.
+  const eventPins: EventPin[] = useMemo(() => {
+    if (kindFilter === 'places') return [];
+    const pins: EventPin[] = [];
+    const seen = new Set<number>();
+    for (const event of nearbyEvents) {
+      if (seen.has(event.id)) continue;
+      if (venueIds.has(event.venue_id)) continue; // already shown as a permanent place pin
+      const venue = allVenuesById.get(event.venue_id);
+      if (!venue || venue.latitude == null || venue.longitude == null) continue;
+      seen.add(event.id);
+      pins.push({ eventId: event.id, venueId: event.venue_id, lat: venue.latitude, lng: venue.longitude, title: event.title });
+    }
+    return pins;
+  }, [kindFilter, nearbyEvents, venueIds, allVenuesById]);
+
+  function handleEventPinClick(eventId: number) {
+    router.push(`/event/${eventId}`);
+  }
+
   return (
     <div className={styles.wrap}>
       <MapView
         venues={visibleVenues}
+        eventPins={eventPins}
         onMoveEnd={handleMoveEnd}
         onClusterClick={handleClusterClick}
         onViewportVenuesChange={handleViewportVenuesChange}
         onPointClick={handlePointClick}
+        onEventPinClick={handleEventPinClick}
+        onPolygonChange={setDrawnPolygon}
       />
       <MapFiltersOverlay
         searchTerm={searchTerm}

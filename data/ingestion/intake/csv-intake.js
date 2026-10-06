@@ -2,6 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { readFileSync } from 'fs';
 import { getDb } from '../db/supabase.js';
 import { upsertVenue, insertEvent, classifyRow } from '../db/funnel.js';
+import { isIrrelevantVenueName } from '../scrapers/utils.js';
 
 // Required CSV columns
 const REQUIRED_FIELDS = ['title', 'venue_name', 'venue_address', 'start_time', 'source_url'];
@@ -25,6 +26,12 @@ function validateRow(row) {
     try { new URL(row.source_url); } catch {
       errors.push(`source_url "${row.source_url}" is not a valid URL`);
     }
+  }
+
+  // Street segments, parking lots, veterans posts, playgrounds, and virtual
+  // placeholders are never real destinations — see scrapers/utils.js.
+  if (row.venue_name && isIrrelevantVenueName(row.venue_name)) {
+    errors.push(`venue_name "${row.venue_name}" looks like a street segment, parking lot, or other non-venue — not a real destination`);
   }
 
   return errors;

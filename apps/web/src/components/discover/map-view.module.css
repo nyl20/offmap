@@ -19,3 +19,36 @@
 .previewAnchorBelow {
   transform: translate(-50%, 14px);
 }
+
+/* Sits immediately right of Mapbox's own NavigationControl (bottom-left,
+   32px wide, 10px margin per mapbox-gl.css) rather than above it, so it
+   never overlaps regardless of how many buttons that control stacks. */
+.drawButton {
+  position: absolute;
+  z-index: 3;
+  left: 52px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-map-panel-bg);
+  backdrop-filter: blur(8px);
+  color: var(--icon-line, #c7cde4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.drawButton:focus-visible {
+  outline: 2px solid var(--color-mint);
+  outline-offset: 2px;
+}
+
+.drawButtonActive {
+  background: var(--icon-fill, var(--color-mint));
+  color: var(--color-on-fill, #10261f);
+  border-color: transparent;
+}

@@ -28,8 +28,9 @@ function collectMediaUrls(item) {
 
 /**
  * Runs the Apify Instagram post scraper for all configured accounts and
- * returns posts normalized to the same shape the old fetch.py emitted:
- * { shortcode, username, caption, timestamp, media_type, media_urls, post_url }.
+ * returns posts normalized to the same shape the old fetch.py emitted, plus
+ * `imageUrl`: { shortcode, username, caption, timestamp, media_type,
+ * media_urls, post_url, imageUrl }.
  */
 export async function fetchApifyPosts() {
   const { accounts = [] } = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
@@ -65,6 +66,10 @@ export async function fetchApifyPosts() {
       media_type: item.type ?? (mediaUrls.length > 1 ? 'Sidecar' : 'Image'),
       media_urls: mediaUrls,
       post_url: item.url ?? `https://www.instagram.com/p/${shortcode}/`,
+      // Static cover/thumbnail image — always present even for video/Reel
+      // posts (unlike media_urls, which prefers the non-OCR-able .mp4 for
+      // those). Used by ocrFlyer.js to read flyer text off the image.
+      imageUrl: item.displayUrl ?? item.imageUrl ?? null,
     });
   }
 

@@ -1,10 +1,13 @@
 'use client';
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Browser-side singleton Supabase client, for Client Components that need
 // live interactivity (search-as-you-type, map viewport queries via
-// nearby_events). Same anon key / RLS scope as the server client.
+// nearby_events, and now auth state). Session is stored in cookies (not
+// localStorage) via @supabase/ssr so the server client in server.ts can
+// read the same session for SSR/route guards.
 let browserClient: SupabaseClient | null = null;
 
 export function getBrowserSupabase(): SupabaseClient {
@@ -19,8 +22,6 @@ export function getBrowserSupabase(): SupabaseClient {
     );
   }
 
-  browserClient = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  browserClient = createBrowserClient(url, anonKey);
   return browserClient;
 }

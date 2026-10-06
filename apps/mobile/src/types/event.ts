@@ -30,4 +30,5 @@ export type OffmapEvent = {
   tags: string[];
   categoryLabels?: string[];
   createdAt: string;
+  isFeatured: boolean;
 };

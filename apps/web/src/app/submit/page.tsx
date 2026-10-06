@@ -1,8 +1,15 @@
+import { redirect } from 'next/navigation';
+
 import { SubmitExperience } from '@/components/submit/submit-experience';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 import styles from './page.module.css';
 
-export default function SubmitPage() {
+export default async function SubmitPage() {
+  const supabase = await getServerSupabase();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) redirect('/sign-in?next=/submit');
+
   return (
     <main className="container">
       <div className={styles.hero}>

@@ -3,7 +3,8 @@
 // in this repo. Re-generate from the CLI once one does; until then keep these
 // in sync with supabase/migrations/20260621000000_init_schema.sql,
 // 20260626000000_add_categories.sql, 20260626110000_add_venue_permanence.sql,
-// and 20260703000000_add_venue_enrichment_fields.sql by hand.
+// 20260703000000_add_venue_enrichment_fields.sql, and
+// 20261002000000_add_is_featured.sql by hand.
 
 export type VenueRow = {
   id: number;
@@ -25,6 +26,7 @@ export type VenueRow = {
   image_url: string | null;
   categories: string[];
   sub_categories: string[];
+  is_featured: boolean;
 };
 
 export type EventRow = {
@@ -42,6 +44,7 @@ export type EventRow = {
   source_url: string;
   ticket_url: string | null;
   organizer_name: string | null;
+  is_featured: boolean;
 };
 
 // Minimal venue shape embedded in an event-with-venue join — just enough for
@@ -63,4 +66,23 @@ export type EventVenueRow = Pick<
 
 export type EventWithVenueRow = EventRow & {
   venues: EventVenueRow | null;
+};
+
+export type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+};
+
+export type SavedEventRow = {
+  user_id: string;
+  event_id: number;
+  created_at: string;
+};
+
+export type SavedVenueRow = {
+  user_id: string;
+  venue_id: number;
+  created_at: string;
 };

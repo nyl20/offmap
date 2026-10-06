@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import { HeartIcon } from '@phosphor-icons/react/ssr';
 
-import { getEventsByIds, getVenuesByIds } from '@offmap/db';
+import { getEventsByIds, getSavedEventIds, getSavedVenueIds, getVenuesByIds } from '@offmap/db';
 import type { VenueRow } from '@offmap/db';
 import { toOffmapEvent, type OffmapEvent } from '@offmap/shared';
 
+import { useAuth } from '@/lib/auth-context';
 import { getBrowserSupabase } from '@/lib/supabase/client';
-import { getBookmarkedIds } from '@/lib/bookmarks';
 import { CardRail } from '@/components/ui/card-rail';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SegmentedToggle } from '@/components/ui/segmented-toggle';
@@ -25,17 +25,33 @@ const KIND_ITEMS = [
 ];
 
 export function SavedExperience() {
+  const { user } = useAuth();
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [events, setEvents] = useState<OffmapEvent[]>([]);
   const [places, setPlaces] = useState<VenueRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      // Resets state when there's no signed-in user (e.g. the brief window
+      // before AuthProvider resolves, or a sign-out while this page is
+      // open) — a one-shot sync with external auth state, not a cascading
+      // render loop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEvents([]);
+      setPlaces([]);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     async function load() {
-      const { events: eventIds, venues: venueIds } = getBookmarkedIds();
       const supabase = getBrowserSupabase();
       try {
+        const [eventIds, venueIds] = await Promise.all([
+          getSavedEventIds(supabase, user!.id),
+          getSavedVenueIds(supabase, user!.id),
+        ]);
         const [eventRows, venueRows] = await Promise.all([
           getEventsByIds(supabase, eventIds),
           getVenuesByIds(supabase, venueIds),
@@ -57,7 +73,7 @@ export function SavedExperience() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user]);
 
   // Un-favoriting from this page should drop the card immediately rather
   // than waiting for a reload — re-reading localStorage on every toggle

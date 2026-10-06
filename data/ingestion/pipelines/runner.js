@@ -1,8 +1,8 @@
 import { getDb } from '../db/supabase.js';
-import { upsertVenue, insertEvent, classifyRow, purgePastEvents, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores, recomputeVenueCompletenessScores, mergeDuplicateVenues, recomputeVenueCanDisplay, mergeCrossNameDuplicateVenues, queueLowConfidenceVenueDuplicates } from '../db/funnel.js';
+import { upsertVenue, insertEvent, classifyRow, purgePastEvents, purgeOrphanedTemporaryVenues, recomputeCanDisplay, recomputeDuplicateGroups, recomputeCompletenessScores, recomputeVenueCompletenessScores, mergeDuplicateVenues, recomputeVenuePermanence, recomputeVenueCanDisplay, mergeCrossNameDuplicateVenues, queueLowConfidenceVenueDuplicates } from '../db/funnel.js';
 import { geocodePendingVenues, backfillNeighborhoods, backfillAddressDetails } from '../geocoding/mapbox.js';
 import { enrichVenuesFromWebsite } from '../db/enrich-venues.js';
-import { isExcludedAudience } from '../scrapers/utils.js';
+import { isExcludedAudience, isIrrelevantVenueName } from '../scrapers/utils.js';
 import * as reddit        from '../scrapers/reddit.js';
 import * as bbg           from '../scrapers/bbg.js';
 import * as moma          from '../scrapers/moma.js';
@@ -113,6 +113,13 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
           summary.skipped++;
           continue;
         }
+        // Street segments, parking lots, veterans posts, playgrounds, and
+        // virtual placeholders are never real destinations — drop before
+        // they ever become a venue row.
+        if (isIrrelevantVenueName(row.venue_name)) {
+          summary.skipped++;
+          continue;
+        }
         try {
           const venueId = await upsertVenue(db, row);
           // OSM already supplies a neighborhood for some venues — write it
@@ -186,6 +193,13 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
         audienceExcluded++;
         continue;
       }
+      // Street segments, parking lots, veterans posts, playgrounds, and
+      // virtual placeholders are never real destinations — drop the event
+      // entirely rather than let it create a junk venue row.
+      if (isIrrelevantVenueName(row.venue_name)) {
+        summary.skipped++;
+        continue;
+      }
       // Already-past events are dropped entirely, never inserted.
       if (new Date(row.start_time) < new Date()) {
         summary.skipped++;
@@ -222,6 +236,14 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
   const purgedCount = await purgePastEvents(db);
   console.log(`[runner] purged ${purgedCount} past events`);
 
+  // Defensive, same rationale as purgePastEvents above — pg_cron also runs
+  // this hourly, but this covers Supabase projects where it isn't enabled.
+  // Must run after purgePastEvents so a venue's last event has already been
+  // deleted before checking whether it's now orphaned.
+  console.log('[runner] purging orphaned temporary venues…');
+  const orphanedCount = await purgeOrphanedTemporaryVenues(db);
+  console.log(`[runner] purged ${orphanedCount} orphaned temporary venues`);
+
   // Geocode any venues the scrapers didn't supply coords for
   if (!skipGeocode && process.env.MAPBOX_TOKEN) {
     console.log('\n[geocoder] geocoding new venues without coordinates…');
@@ -252,6 +274,12 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
   console.log('\n[runner] recomputing venue completeness scores…');
   await runStage('recomputeVenueCompletenessScores', () => recomputeVenueCompletenessScores(db));
 
+  // Must run before recomputeVenueCanDisplay just below, which reads
+  // is_permanent — same pre/post-merge redundancy rationale as that call.
+  console.log('[runner] recomputing venue permanence (pre-merge)…');
+  const preMergePermanenceCount = await runStage('recomputeVenuePermanence (pre-merge)', () => recomputeVenuePermanence(db));
+  if (preMergePermanenceCount != null) console.log(`[runner] ${preMergePermanenceCount} venue(s) promoted to permanent`);
+
   // Run the display-gate recompute here too, BEFORE the merge/dedup block —
   // not just after. is_source_suspect (unlike the old category-shape check
   // it replaces) isn't defeated by the category-array unions merges
@@ -276,6 +304,13 @@ export async function runScrapers({ skipGeocode = false, only = null } = {}) {
 
   console.log('[runner] recomputing venue completeness scores (post-merge)…');
   await runStage('recomputeVenueCompletenessScores (post-merge)', () => recomputeVenueCompletenessScores(db));
+
+  // Run again post-merge: a merge can push a venue's lifetime_event_count
+  // over the promotion threshold for the first time (merge_venue_into sums
+  // the two sides' counts), and the pre-merge pass above wouldn't see that.
+  console.log('[runner] recomputing venue permanence (post-merge)…');
+  const postMergePermanenceCount = await runStage('recomputeVenuePermanence (post-merge)', () => recomputeVenuePermanence(db));
+  if (postMergePermanenceCount != null) console.log(`[runner] ${postMergePermanenceCount} venue(s) promoted to permanent`);
 
   console.log('[runner] recomputing venue can_display (post-merge)…');
   const venueDisplayCount = await runStage('recomputeVenueCanDisplay (post-merge)', () => recomputeVenueCanDisplay(db));

@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { HeartIcon } from '@phosphor-icons/react/ssr';
 
-import { isBookmarked, toggleBookmark } from '@/lib/bookmarks';
+import { useAuth } from '@/lib/auth-context';
+import { toggleSaved, useSavedIds } from '@/lib/saved';
 import styles from './favorite-button.module.css';
 
 const BURST_LINE_COUNT = 6;
@@ -16,16 +18,11 @@ type FavoriteButtonProps = {
 };
 
 export function FavoriteButton({ kind, id, onChange }: FavoriteButtonProps) {
-  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const { user } = useAuth();
+  const savedIds = useSavedIds(user?.id ?? null);
+  const saved = kind === 'event' ? savedIds.events.has(id) : savedIds.venues.has(id);
   const [bursting, setBursting] = useState(false);
-
-  useEffect(() => {
-    // One-shot sync from localStorage on mount — SSR has no access to it, so
-    // this can't be a lazy useState initializer without risking a hydration
-    // mismatch between server ("false") and client (the real saved state).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSaved(isBookmarked(kind, id));
-  }, [kind, id]);
 
   useEffect(() => {
     if (!bursting) return;
@@ -33,15 +30,24 @@ export function FavoriteButton({ kind, id, onChange }: FavoriteButtonProps) {
     return () => window.clearTimeout(timer);
   }, [bursting]);
 
-  function handleClick(event: React.MouseEvent) {
+  async function handleClick(event: React.MouseEvent) {
     // The button floats over the card's <Link> — stop the click from also
     // triggering navigation to the event/venue detail page.
     event.preventDefault();
     event.stopPropagation();
-    const nowSaved = toggleBookmark(kind, id);
-    setSaved(nowSaved);
-    onChange?.(nowSaved);
-    if (nowSaved) setBursting(true);
+
+    if (!user) {
+      router.push(`/sign-in?next=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+
+    try {
+      const nowSaved = await toggleSaved(kind, id, user.id);
+      onChange?.(nowSaved);
+      if (nowSaved) setBursting(true);
+    } catch (err) {
+      console.error('failed to toggle saved state', err);
+    }
   }
 
   return (

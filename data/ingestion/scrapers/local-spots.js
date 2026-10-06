@@ -3,8 +3,8 @@ import { splitUSAddress } from './utils.js';
 import { enrichVenue } from './local-spots/enrichVenue.js';
 
 // General-purpose permanent-venue scraper using OpenStreetMap's free Overpass
-// API. Covers museums, galleries, thrift/vintage/book/record shops, community
-// centres, arts centres, and craft studios within the NYC bounding box.
+// API. Covers museums, galleries, thrift/vintage/book/record shops, arts
+// centres, and craft studios within the NYC bounding box.
 // Replaces the old osm_museums scraper and refreshes those records on each run.
 export const name      = 'local-spots';
 export const envKey    = null;
@@ -41,7 +41,6 @@ function getCategory(tags) {
   if (tags.tourism === 'museum')           return { category: 'Museum', subCategory: null };     // → Visual Arts & Museums
   if (tags.tourism === 'gallery')          return { category: 'Gallery', subCategory: null };     // → Visual Arts & Museums
   if (tags.amenity === 'arts_centre')      return { category: 'Art', subCategory: null };         // → Visual Arts & Museums
-  if (tags.amenity === 'community_centre') return { category: 'Community', subCategory: null };   // → Community & Culture
   if (tags.craft)                          return { category: 'Craft', subCategory: CRAFT_SUBCATEGORY[tags.craft] ?? null }; // → Arts & Crafts
   if (tags.shop)                           return { category: 'Shop', subCategory: SHOP_SUBCATEGORY[tags.shop] ?? null };    // → Shopping
   return null;
@@ -58,7 +57,13 @@ function buildQuery() {
     '"shop"="second_hand"', '"shop"="charity"',
     '"shop"="vintage"',    '"shop"="antiques"',
     '"shop"="books"',      '"shop"="music"',
-    '"amenity"="community_centre"',
+    // "amenity"="community_centre" deliberately NOT queried — OSM tags any
+    // community center this way regardless of whether it actually hosts
+    // public programming, which pulled in hundreds of generic municipal
+    // rec/senior centers with no events ever attached (see
+    // db/venue-quality.js's generic-municipal-facility audit). A genuinely
+    // notable community center (e.g. one that's actually a cultural
+    // destination) should be added deliberately, not swept in by tag alone.
     '"amenity"="arts_centre"',
     // Explicit allowlist of art/craft *studio* subtypes — NOT a bare
     // `"craft"` filter. OSM's craft=* key also covers service/repair trades

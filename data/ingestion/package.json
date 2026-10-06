@@ -9,6 +9,7 @@
     "geocode-pending": "node pipelines/geocode-pending.js",
     "backfill-categories": "node pipelines/backfill-categories.js",
     "purge-service-trades": "node pipelines/purge-service-trade-venues.js",
+    "audit-venue-quality": "node pipelines/audit-venue-quality.js",
     "enrich-venues": "node pipelines/enrich-venues.js",
     "serve": "node pipelines/serve.js",
     "scrape": "node pipelines/scrape.js",

@@ -1,9 +1,11 @@
 // PAUSED — not registered in pipelines/runner.js's SCRAPERS array, so this
 // doesn't run under `npm run scrape` or `npm run scrape:instagram`. The code
-// itself is functional (Apify fetch → Groq structured extraction on
-// captions); see README.md for status and how to resume.
+// itself is functional (Apify fetch → Gemini flyer OCR → Groq structured
+// extraction on captions + flyer text); see README.md for status and how to
+// resume.
 import { parseEvents } from './instagram/parseEvent.js';
 import { fetchApifyPosts } from './instagram/fetchApify.js';
+import { extractFlyerText } from './instagram/ocrFlyer.js';
 
 export const name = 'instagram';
 export const envKey = 'APIFY_TOKEN';
@@ -18,10 +20,15 @@ export async function fetchEvents() {
 
   for (const post of posts) {
     try {
+      // Flyer text often carries the actual date/time/venue when the
+      // caption itself is purely promotional — non-fatal if it fails.
+      const flyerText = await extractFlyerText(post.imageUrl);
+
       const parsedEvents = await parseEvents({
         caption:       post.caption,
         postTimestamp: post.timestamp,
         username:      post.username,
+        flyerText,
       });
 
       // Use first non-video CDN URL as the event image (Instagram CDN URLs expire

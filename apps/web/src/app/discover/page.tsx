@@ -8,7 +8,7 @@ import styles from './page.module.css';
 export const revalidate = 300;
 
 export default async function DiscoverPage() {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const venues = await getVenues(supabase, { onlyGeocoded: true });
 
   return (
